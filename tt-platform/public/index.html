@@ -387,7 +387,7 @@ function openDetail(id){
 
 function renderDetailTabs(biz, activeTab){
   const deals = activeDeals(biz);
-  const tabs = ['Overview', 'Posts', 'Menu', 'Review', 'About'];
+  const tabs = ['Overview', 'Posts', 'Jobs', 'Menu', 'Review', 'About'];
   const tabsHtml = tabs.map(t => {
     const key = t.toLowerCase();
     return `<button class="detailTabBtn ${key === activeTab ? 'active' : ''}" data-tab="${key}">${t}</button>`;
@@ -417,6 +417,23 @@ function renderDetailTabs(biz, activeTab){
           </div>
         `).join('')
       : `<div class="emptyState">No posts yet — check back soon!</div>`;
+  } else if (activeTab === 'jobs'){
+    const jobs = biz.jobs || [];
+    panelHtml = jobs.length
+      ? jobs.map(j => `
+          <div class="postItem">
+            <b style="font-size:14px;">💼 ${escapeHtml(j.title)}</b>
+            ${j.employmentType ? ` · <span class="postDate">${escapeHtml(j.employmentType)}</span>` : ''}
+            <div class="postDate">
+              ${j.location ? escapeHtml(j.location) + ' · ' : ''}Posted ${new Date(j.createdAt).toLocaleDateString()}
+              ${j.closingDate ? ' · Closes ' + new Date(j.closingDate).toLocaleDateString() : ''}
+            </div>
+            ${j.salary ? `<div class="row"><b>Salary:</b> ${escapeHtml(j.salary)}</div>` : ''}
+            ${j.description ? `<div class="desc">${escapeHtml(j.description)}</div>` : ''}
+            ${j.requirements ? `<div class="row"><b>Requirements:</b> ${escapeHtml(j.requirements)}</div>` : ''}
+          </div>
+        `).join('')
+      : `<div class="emptyState">No job openings right now — check back soon!</div>`;
   } else if (activeTab === 'menu'){
     const menuPhotos = biz.menuPhotos || [];
     const highlights = biz.highlights || [];

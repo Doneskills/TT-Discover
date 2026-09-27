@@ -1250,6 +1250,9 @@ async function loadMyListings(isInitial){
     const postsBtn = document.createElement('button');
     postsBtn.className = 'secondary';
     postsBtn.textContent = '📢 Posts';
+    const jobsBtn = document.createElement('button');
+    jobsBtn.className = 'secondary';
+    jobsBtn.textContent = '💼 Jobs';
     const delBtn = document.createElement('button');
     delBtn.className = 'danger';
     delBtn.textContent = 'Delete';
@@ -1260,6 +1263,7 @@ async function loadMyListings(isInitial){
     });
     actionsCell.appendChild(viewLink);
     actionsCell.appendChild(postsBtn);
+    actionsCell.appendChild(jobsBtn);
     actionsCell.appendChild(delBtn);
 
     row.appendChild(nameCell);
@@ -1291,6 +1295,29 @@ async function loadMyListings(isInitial){
       }
     });
     tbody.appendChild(postsRow);
+
+    const jobsRow = document.createElement('tr');
+    const jobsCell = document.createElement('td');
+    jobsCell.colSpan = 5;
+    const jobsPanel = document.createElement('div');
+    jobsPanel.style.cssText = 'display:none;padding:10px 0;';
+    jobsCell.appendChild(jobsPanel);
+    jobsRow.appendChild(jobsCell);
+    jobsRow.style.display = 'none';
+    jobsBtn.addEventListener('click', () => {
+      const isOpen = jobsRow.style.display !== 'none';
+      if (!isOpen){
+        buildJobsPanel(jobsPanel, biz);
+        jobsPanel.style.display = 'block';
+        jobsRow.style.display = 'table-row';
+        jobsBtn.textContent = 'Close';
+      } else {
+        jobsPanel.style.display = 'none';
+        jobsRow.style.display = 'none';
+        jobsBtn.textContent = '💼 Jobs';
+      }
+    });
+    tbody.appendChild(jobsRow);
   });
 }
 
@@ -1362,6 +1389,102 @@ function renderPostList(biz){
       });
       biz.posts = (biz.posts || []).filter(p => p._id !== btn.dataset.postId);
       renderPostList(biz);
+    });
+  });
+}
+
+function buildJobsPanel(container, biz){
+  container.innerHTML = `
+    <label style="display:block;font-size:11px;text-transform:uppercase;color:#999;margin:8px 0 4px;">Job Title</label>
+    <input type="text" id="jobTitle_${biz._id}" placeholder="e.g. Computer Technician">
+    <label style="display:block;font-size:11px;text-transform:uppercase;color:#999;margin:8px 0 4px;">Description</label>
+    <textarea id="jobDescription_${biz._id}" placeholder="What will they be doing?"></textarea>
+    <label style="display:block;font-size:11px;text-transform:uppercase;color:#999;margin:8px 0 4px;">Location</label>
+    <input type="text" id="jobLocation_${biz._id}" placeholder="e.g. Arima">
+    <label style="display:block;font-size:11px;text-transform:uppercase;color:#999;margin:8px 0 4px;">Employment Type</label>
+    <select id="jobType_${biz._id}">
+      <option value="">Select one</option>
+      <option value="Full-time">Full-time</option>
+      <option value="Part-time">Part-time</option>
+      <option value="Contract">Contract</option>
+      <option value="Temporary">Temporary</option>
+    </select>
+    <label style="display:block;font-size:11px;text-transform:uppercase;color:#999;margin:8px 0 4px;">Salary (optional)</label>
+    <input type="text" id="jobSalary_${biz._id}" placeholder="e.g. TT$4,000 - $5,500/month">
+    <label style="display:block;font-size:11px;text-transform:uppercase;color:#999;margin:8px 0 4px;">Requirements</label>
+    <textarea id="jobRequirements_${biz._id}" placeholder="What should they already have/know?"></textarea>
+    <label style="display:block;font-size:11px;text-transform:uppercase;color:#999;margin:8px 0 4px;">Closing Date (optional)</label>
+    <input type="date" id="jobClosingDate_${biz._id}">
+    <button id="jobPublishBtn_${biz._id}" style="margin-top:10px;">Post Job</button>
+    <div class="msg" id="jobMsg_${biz._id}"></div>
+    <div id="jobList_${biz._id}" style="margin-top:16px;"></div>
+  `;
+  document.getElementById('jobPublishBtn_' + biz._id).addEventListener('click', async () => {
+    const msg = document.getElementById('jobMsg_' + biz._id);
+    const title = document.getElementById('jobTitle_' + biz._id).value;
+    if (!title.trim()){ msg.textContent = 'A job title is required.'; return; }
+    msg.textContent = 'Posting...';
+    try {
+      const res = await fetch('/api/my/businesses/' + biz._id + '/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+        body: JSON.stringify({
+          title,
+          description: document.getElementById('jobDescription_' + biz._id).value,
+          location: document.getElementById('jobLocation_' + biz._id).value,
+          employmentType: document.getElementById('jobType_' + biz._id).value,
+          salary: document.getElementById('jobSalary_' + biz._id).value,
+          requirements: document.getElementById('jobRequirements_' + biz._id).value,
+          closingDate: document.getElementById('jobClosingDate_' + biz._id).value
+        })
+      });
+      const data = await res.json();
+      if (res.ok){
+        biz.jobs = biz.jobs || [];
+        biz.jobs.unshift(data.job);
+        msg.textContent = 'Posted!';
+        ['jobTitle_','jobDescription_','jobLocation_','jobType_','jobSalary_','jobRequirements_','jobClosingDate_'].forEach(prefix => {
+          document.getElementById(prefix + biz._id).value = '';
+        });
+        renderJobList(biz);
+      } else {
+        msg.textContent = data.error || 'Could not create job listing.';
+      }
+    } catch (err) {
+      msg.textContent = 'Something went wrong — please try again.';
+    }
+  });
+  renderJobList(biz);
+}
+
+function renderJobList(biz){
+  const listBox = document.getElementById('jobList_' + biz._id);
+  const jobs = biz.jobs || [];
+  if (!jobs.length){
+    listBox.innerHTML = '<p style="color:#999;font-size:13px;">No job listings yet.</p>';
+    return;
+  }
+  listBox.innerHTML = jobs.map(j => `
+    <div style="border-top:1px solid #f0e4d0;padding:10px 0;">
+      <b style="font-size:13px;">${escapeHtml(j.title)}</b>
+      ${j.employmentType ? ` · <span style="font-size:12px;color:#999;">${escapeHtml(j.employmentType)}</span>` : ''}
+      <div style="font-size:12px;color:#999;">
+        ${j.location ? escapeHtml(j.location) + ' · ' : ''}Posted ${new Date(j.createdAt).toLocaleDateString()}
+        ${j.closingDate ? ' · Closes ' + new Date(j.closingDate).toLocaleDateString() : ''}
+      </div>
+      ${j.salary ? `<p style="font-size:13px;margin:6px 0;"><b>Salary:</b> ${escapeHtml(j.salary)}</p>` : ''}
+      ${j.description ? `<p style="font-size:13px;margin:6px 0;">${escapeHtml(j.description)}</p>` : ''}
+      ${j.requirements ? `<p style="font-size:13px;margin:6px 0;"><b>Requirements:</b> ${escapeHtml(j.requirements)}</p>` : ''}
+      <button class="danger" data-job-id="${j._id}" style="padding:5px 10px;font-size:11px;">Delete</button>
+    </div>
+  `).join('');
+  listBox.querySelectorAll('button[data-job-id]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await fetch('/api/my/businesses/' + biz._id + '/jobs/' + btn.dataset.jobId, {
+        method: 'DELETE', headers: { 'x-auth-token': token }
+      });
+      biz.jobs = (biz.jobs || []).filter(j => j._id !== btn.dataset.jobId);
+      renderJobList(biz);
     });
   });
 }
