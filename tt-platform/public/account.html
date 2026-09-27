@@ -77,6 +77,23 @@
   .bizActionsCell button, .bizActionsCell a {
     font-size: 11px; padding: 5px 9px; margin: 0; width: auto;
   }
+  .rowMenuBtn {
+    width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--input-border);
+    background: var(--input-bg); color: var(--text); cursor: pointer; font-size: 16px;
+    line-height: 1; padding: 0; margin: 0;
+  }
+  .rowMenuDropdown {
+    position: absolute; right: 0; top: 100%; margin-top: 4px; background: var(--card-bg);
+    border: 1px solid var(--input-border); border-radius: 8px; box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+    z-index: 5; min-width: 140px; padding: 6px; white-space: nowrap;
+  }
+  .rowMenuDropdown a, .rowMenuDropdown button {
+    display: block; width: 100%; text-align: left; padding: 8px 10px; font-size: 12px;
+    margin: 0; background: none; border: none; border-radius: 6px; color: var(--text);
+    text-decoration: none; cursor: pointer;
+  }
+  .rowMenuDropdown a:hover, .rowMenuDropdown button:hover { background: var(--soft-bg); }
+  .rowMenuDropdown button.danger { color: #c94a3a; background: none; }
   .planBadge {
     display: inline-block; background: var(--soft-bg); color: #7a5c30; padding: 4px 10px;
     border-radius: 20px; font-size: 12px; font-weight: 700;
@@ -187,6 +204,16 @@
     margin: 0; border-radius: 0;
   }
   .studioNavItem.active { background: var(--soft-bg); color: #e0562f; }
+  #studioHiringToggle {
+    display: flex; align-items: center; justify-content: space-between; width: 100%;
+    padding: 11px 16px; font-size: 13px; font-weight: 600; color: var(--text-muted3);
+    cursor: pointer; margin-top: 6px; border: none; background: none; text-align: left;
+  }
+  #studioHiringToggle.on { color: #2e7d32; }
+  #studioHiringToggle .hiringDot {
+    display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #bbb;
+  }
+  #studioHiringToggle.on .hiringDot { background: #2e7d32; }
   .studioSidebarFooterLink {
     display: block; text-align: center; margin-top: 16px; font-size: 12px;
     color: var(--text-muted); text-decoration: none; padding-top: 12px; border-top: 1px solid var(--soft-bg);
@@ -274,6 +301,7 @@
           <button type="button" class="studioNavItem" data-group="locationinfo">Location</button>
           <button type="button" class="studioNavItem" data-group="social">Social Media Links</button>
         </nav>
+        <button type="button" id="studioHiringToggle"><span>Hiring Now</span><span class="hiringDot"></span></button>
         <a href="#" id="logoutBtn" class="studioSidebarFooterLink">Log Out</a>
       </div>
 
@@ -868,6 +896,7 @@ function updateStudioModeUI(biz){
 
 function populateStudioForm(biz){
   currentBizId = biz._id;
+  updateHiringToggleUI(!!biz.hiring);
   document.getElementById('bName').value = biz.name || '';
   document.getElementById('bCategory').value = biz.category || '';
   document.getElementById('bDescription').value = biz.description || '';
@@ -901,6 +930,7 @@ function populateStudioForm(biz){
 
 function clearStudioForm(){
   currentBizId = null;
+  updateHiringToggleUI(false);
   ['bName','bCategory','bDescription','bAddress','bArea','bPhone','bEmail','bImageUrl',
    'aboutAccessibility','aboutServiceOptions','aboutPopularFor','aboutOfferings','aboutDiningOptions',
    'aboutAtmosphere','aboutCrowd','aboutPayments','aboutChildren','aboutParking',
@@ -919,6 +949,25 @@ document.getElementById('studioNewBtn').addEventListener('click', () => {
   clearStudioForm();
   document.getElementById('studioListingsPanel').style.display = 'none';
   document.getElementById('studioBody').style.display = 'flex';
+});
+
+function updateHiringToggleUI(isHiring){
+  const btn = document.getElementById('studioHiringToggle');
+  btn.classList.toggle('on', isHiring);
+  btn.querySelector('span').textContent = isHiring ? 'Hiring Now' : 'Not Hiring';
+}
+document.getElementById('studioHiringToggle').addEventListener('click', async () => {
+  if (!currentBizId){
+    document.getElementById('addMsg').textContent = 'Save your business first before turning on hiring.';
+    return;
+  }
+  const nowOn = !document.getElementById('studioHiringToggle').classList.contains('on');
+  const res = await fetch('/api/my/businesses/' + currentBizId + '/hiring', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+    body: JSON.stringify({ hiring: nowOn })
+  });
+  if (res.ok) updateHiringToggleUI(nowOn);
 });
 
 document.getElementById('addBizBtn').addEventListener('click', async () => {
@@ -1161,6 +1210,10 @@ function buildEditPanel(container, biz){
   });
 }
 
+document.addEventListener('click', () => {
+  document.querySelectorAll('.rowMenuDropdown').forEach(d => { d.style.display = 'none'; });
+});
+
 async function loadMyListings(isInitial){
   const res = await fetch('/api/my/businesses', { headers: { 'x-auth-token': token } });
   if (!res.ok) return;
@@ -1182,9 +1235,9 @@ async function loadMyListings(isInitial){
       <tr>
         <th>Business</th>
         <th>Category</th>
-        <th>Hiring</th>
         <th>Created</th>
-        <th>Actions</th>
+        <th>Status</th>
+        <th></th>
       </tr>
     </thead>
     <tbody id="bizTableBody"></tbody>
@@ -1218,59 +1271,58 @@ async function loadMyListings(isInitial){
     const categoryCell = document.createElement('td');
     categoryCell.textContent = biz.category || '—';
 
-    const hiringCell = document.createElement('td');
-    const hiringBtn = document.createElement('button');
-    hiringBtn.className = 'hiringBtn' + (biz.hiring ? ' on' : '');
-    hiringBtn.textContent = biz.hiring ? '✅ Hiring Now' : '📢 Not Hiring';
-    hiringBtn.addEventListener('click', async () => {
-      const newVal = !biz.hiring;
-      const res = await fetch('/api/my/businesses/' + biz._id + '/hiring', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
-        body: JSON.stringify({ hiring: newVal })
-      });
-      if (res.ok){
-        biz.hiring = newVal;
-        hiringBtn.className = 'hiringBtn' + (newVal ? ' on' : '');
-        hiringBtn.textContent = newVal ? '✅ Hiring Now' : '📢 Not Hiring';
-      }
-    });
-    hiringCell.appendChild(hiringBtn);
-
     const dateCell = document.createElement('td');
     dateCell.textContent = biz.createdAt ? new Date(biz.createdAt).toLocaleDateString() : '—';
 
-    const actionsCell = document.createElement('td');
-    actionsCell.className = 'bizActionsCell';
+    const statusCell = document.createElement('td');
+    statusCell.innerHTML = '<span class="planBadge" style="background:#2e7d3222;color:#2e7d32;">🟢 Live</span>';
+
+    const menuCell = document.createElement('td');
+    menuCell.style.position = 'relative';
+    const menuBtn = document.createElement('button');
+    menuBtn.className = 'rowMenuBtn';
+    menuBtn.textContent = '⋮';
+    const dropdown = document.createElement('div');
+    dropdown.className = 'rowMenuDropdown';
+    dropdown.style.display = 'none';
+
     const viewLink = document.createElement('a');
     viewLink.href = '/biz/' + biz._id;
     viewLink.target = '_blank';
-    viewLink.textContent = '🔗 View';
-    viewLink.style.cssText = 'color:#e0562f;text-decoration:none;';
+    viewLink.textContent = '🔗 View Page';
     const postsBtn = document.createElement('button');
-    postsBtn.className = 'secondary';
+    postsBtn.type = 'button';
     postsBtn.textContent = '📢 Posts';
     const jobsBtn = document.createElement('button');
-    jobsBtn.className = 'secondary';
+    jobsBtn.type = 'button';
     jobsBtn.textContent = '💼 Jobs';
     const delBtn = document.createElement('button');
+    delBtn.type = 'button';
     delBtn.className = 'danger';
-    delBtn.textContent = 'Delete';
+    delBtn.textContent = '🗑️ Delete';
     delBtn.addEventListener('click', async () => {
       await fetch('/api/my/businesses/' + biz._id, { method: 'DELETE', headers: { 'x-auth-token': token } });
       if (currentBizId === biz._id) clearStudioForm();
       loadMyListings();
     });
-    actionsCell.appendChild(viewLink);
-    actionsCell.appendChild(postsBtn);
-    actionsCell.appendChild(jobsBtn);
-    actionsCell.appendChild(delBtn);
+    dropdown.appendChild(viewLink);
+    dropdown.appendChild(postsBtn);
+    dropdown.appendChild(jobsBtn);
+    dropdown.appendChild(delBtn);
+    menuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = dropdown.style.display !== 'none';
+      document.querySelectorAll('.rowMenuDropdown').forEach(d => { d.style.display = 'none'; });
+      dropdown.style.display = isOpen ? 'none' : 'block';
+    });
+    menuCell.appendChild(menuBtn);
+    menuCell.appendChild(dropdown);
 
     row.appendChild(nameCell);
     row.appendChild(categoryCell);
-    row.appendChild(hiringCell);
     row.appendChild(dateCell);
-    row.appendChild(actionsCell);
+    row.appendChild(statusCell);
+    row.appendChild(menuCell);
     tbody.appendChild(row);
 
     const postsRow = document.createElement('tr');
