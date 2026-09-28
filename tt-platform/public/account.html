@@ -94,12 +94,6 @@
   }
   .rowMenuDropdown a:hover, .rowMenuDropdown button:hover { background: var(--soft-bg); }
   .rowMenuDropdown button.danger { color: #c94a3a; background: none; }
-  .rowIconBtn {
-    width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--input-border);
-    background: var(--input-bg); color: var(--text); cursor: pointer; font-size: 13px;
-    line-height: 1; padding: 0; margin: 0 6px 0 0;
-  }
-  .rowIconBtn:hover { background: var(--soft-bg); }
   .planBadge {
     display: inline-block; background: var(--soft-bg); color: #7a5c30; padding: 4px 10px;
     border-radius: 20px; font-size: 12px; font-weight: 700;
@@ -1246,7 +1240,6 @@ async function loadMyListings(isInitial){
         <th>Created</th>
         <th>Status</th>
         <th></th>
-        <th></th>
       </tr>
     </thead>
     <tbody id="bizTableBody"></tbody>
@@ -1288,32 +1281,6 @@ async function loadMyListings(isInitial){
     const statusCell = document.createElement('td');
     statusCell.innerHTML = '<span class="planBadge" style="background:#2e7d3222;color:#2e7d32;">🟢 Live</span>';
 
-    // Small inline icon links so View/Posts/Jobs stay reachable without
-    // living in the ⋮ menu. Each stops the row click so it doesn't also
-    // open the editor.
-    const quickCell = document.createElement('td');
-    quickCell.style.cssText = 'white-space:nowrap;';
-    const viewLink = document.createElement('a');
-    viewLink.href = '/biz/' + biz._id;
-    viewLink.target = '_blank';
-    viewLink.textContent = '🔗';
-    viewLink.title = 'View Page';
-    viewLink.style.cssText = 'margin-right:10px;text-decoration:none;';
-    viewLink.addEventListener('click', (e) => e.stopPropagation());
-    const postsBtn = document.createElement('button');
-    postsBtn.type = 'button';
-    postsBtn.textContent = '📢';
-    postsBtn.title = 'Posts';
-    postsBtn.className = 'rowIconBtn';
-    const jobsBtn = document.createElement('button');
-    jobsBtn.type = 'button';
-    jobsBtn.textContent = '💼';
-    jobsBtn.title = 'Jobs';
-    jobsBtn.className = 'rowIconBtn';
-    quickCell.appendChild(viewLink);
-    quickCell.appendChild(postsBtn);
-    quickCell.appendChild(jobsBtn);
-
     const menuCell = document.createElement('td');
     menuCell.style.position = 'relative';
     const menuBtn = document.createElement('button');
@@ -1347,57 +1314,8 @@ async function loadMyListings(isInitial){
     row.appendChild(categoryCell);
     row.appendChild(dateCell);
     row.appendChild(statusCell);
-    row.appendChild(quickCell);
     row.appendChild(menuCell);
     tbody.appendChild(row);
-
-    const postsRow = document.createElement('tr');
-    const postsCell = document.createElement('td');
-    postsCell.colSpan = 6;
-    const postsPanel = document.createElement('div');
-    postsPanel.style.cssText = 'display:none;padding:10px 0;';
-    postsCell.appendChild(postsPanel);
-    postsRow.appendChild(postsCell);
-    postsRow.style.display = 'none';
-    postsBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const isOpen = postsRow.style.display !== 'none';
-      if (!isOpen){
-        buildPostsPanel(postsPanel, biz);
-        postsPanel.style.display = 'block';
-        postsRow.style.display = 'table-row';
-        postsBtn.textContent = 'Close';
-      } else {
-        postsPanel.style.display = 'none';
-        postsRow.style.display = 'none';
-        postsBtn.textContent = '📢 Posts';
-      }
-    });
-    tbody.appendChild(postsRow);
-
-    const jobsRow = document.createElement('tr');
-    const jobsCell = document.createElement('td');
-    jobsCell.colSpan = 6;
-    const jobsPanel = document.createElement('div');
-    jobsPanel.style.cssText = 'display:none;padding:10px 0;';
-    jobsCell.appendChild(jobsPanel);
-    jobsRow.appendChild(jobsCell);
-    jobsRow.style.display = 'none';
-    jobsBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const isOpen = jobsRow.style.display !== 'none';
-      if (!isOpen){
-        buildJobsPanel(jobsPanel, biz);
-        jobsPanel.style.display = 'block';
-        jobsRow.style.display = 'table-row';
-        jobsBtn.textContent = 'Close';
-      } else {
-        jobsPanel.style.display = 'none';
-        jobsRow.style.display = 'none';
-        jobsBtn.textContent = '💼 Jobs';
-      }
-    });
-    tbody.appendChild(jobsRow);
   });
 }
 
