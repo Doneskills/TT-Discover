@@ -94,6 +94,12 @@
   }
   .rowMenuDropdown a:hover, .rowMenuDropdown button:hover { background: var(--soft-bg); }
   .rowMenuDropdown button.danger { color: #c94a3a; background: none; }
+  .rowIconBtn {
+    width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--input-border);
+    background: var(--input-bg); color: var(--text); cursor: pointer; font-size: 13px;
+    line-height: 1; padding: 0; margin: 0 6px 0 0;
+  }
+  .rowIconBtn:hover { background: var(--soft-bg); }
   .planBadge {
     display: inline-block; background: var(--soft-bg); color: #7a5c30; padding: 4px 10px;
     border-radius: 20px; font-size: 12px; font-weight: 700;
@@ -220,7 +226,9 @@
   }
   #studioMain { flex: 1; padding: 20px 32px; min-width: 0; max-width: 720px; }
   #studioMain h2 { font-size: 19px; margin-bottom: 12px; }
-  #studioListingsPanel { padding: 24px 32px; max-width: 720px; }
+  #studioListingsPanel { padding: 24px 32px; width: 100%; }
+  #studioListingsPanel .card { max-width: none; }
+  .bizTable tr[data-bizrow]:hover { background: var(--soft-bg); cursor: pointer; }
   .studioField { display: none; }
   .studioField.active { display: block; }
   @media (max-width: 640px) {
@@ -1238,6 +1246,7 @@ async function loadMyListings(isInitial){
         <th>Created</th>
         <th>Status</th>
         <th></th>
+        <th></th>
       </tr>
     </thead>
     <tbody id="bizTableBody"></tbody>
@@ -1249,6 +1258,13 @@ async function loadMyListings(isInitial){
 
   list.forEach(biz => {
     const row = document.createElement('tr');
+    row.setAttribute('data-bizrow', '1');
+    row.title = 'Open this business in the editor';
+    row.addEventListener('click', () => {
+      populateStudioForm(biz);
+      document.getElementById('studioListingsPanel').style.display = 'none';
+      document.getElementById('studioBody').style.display = 'flex';
+    });
 
     const nameCell = document.createElement('td');
     const nameWrap = document.createElement('div');
@@ -1258,14 +1274,9 @@ async function loadMyListings(isInitial){
       ? `<img src="${thumbSrc}" class="bizThumb">`
       : `<div class="bizThumb">🏪</div>`;
     nameWrap.innerHTML = `${thumb}<div>
-      <div class="bizNameText" style="cursor:pointer;" title="Edit this business in Studio">${escapeHtml(biz.name)}</div>
+      <div class="bizNameText">${escapeHtml(biz.name)}</div>
       <div class="bizMetaText">${escapeHtml(biz.area || '')}</div>
     </div>`;
-    nameWrap.querySelector('.bizNameText').addEventListener('click', () => {
-      populateStudioForm(biz);
-      document.getElementById('studioListingsPanel').style.display = 'none';
-      document.getElementById('studioBody').style.display = 'flex';
-    });
     nameCell.appendChild(nameWrap);
 
     const categoryCell = document.createElement('td');
@@ -1277,6 +1288,32 @@ async function loadMyListings(isInitial){
     const statusCell = document.createElement('td');
     statusCell.innerHTML = '<span class="planBadge" style="background:#2e7d3222;color:#2e7d32;">🟢 Live</span>';
 
+    // Small inline icon links so View/Posts/Jobs stay reachable without
+    // living in the ⋮ menu. Each stops the row click so it doesn't also
+    // open the editor.
+    const quickCell = document.createElement('td');
+    quickCell.style.cssText = 'white-space:nowrap;';
+    const viewLink = document.createElement('a');
+    viewLink.href = '/biz/' + biz._id;
+    viewLink.target = '_blank';
+    viewLink.textContent = '🔗';
+    viewLink.title = 'View Page';
+    viewLink.style.cssText = 'margin-right:10px;text-decoration:none;';
+    viewLink.addEventListener('click', (e) => e.stopPropagation());
+    const postsBtn = document.createElement('button');
+    postsBtn.type = 'button';
+    postsBtn.textContent = '📢';
+    postsBtn.title = 'Posts';
+    postsBtn.className = 'rowIconBtn';
+    const jobsBtn = document.createElement('button');
+    jobsBtn.type = 'button';
+    jobsBtn.textContent = '💼';
+    jobsBtn.title = 'Jobs';
+    jobsBtn.className = 'rowIconBtn';
+    quickCell.appendChild(viewLink);
+    quickCell.appendChild(postsBtn);
+    quickCell.appendChild(jobsBtn);
+
     const menuCell = document.createElement('td');
     menuCell.style.position = 'relative';
     const menuBtn = document.createElement('button');
@@ -1286,28 +1323,16 @@ async function loadMyListings(isInitial){
     dropdown.className = 'rowMenuDropdown';
     dropdown.style.display = 'none';
 
-    const viewLink = document.createElement('a');
-    viewLink.href = '/biz/' + biz._id;
-    viewLink.target = '_blank';
-    viewLink.textContent = '🔗 View Page';
-    const postsBtn = document.createElement('button');
-    postsBtn.type = 'button';
-    postsBtn.textContent = '📢 Posts';
-    const jobsBtn = document.createElement('button');
-    jobsBtn.type = 'button';
-    jobsBtn.textContent = '💼 Jobs';
     const delBtn = document.createElement('button');
     delBtn.type = 'button';
     delBtn.className = 'danger';
-    delBtn.textContent = '🗑️ Delete';
-    delBtn.addEventListener('click', async () => {
+    delBtn.textContent = '🗑️ Delete Business';
+    delBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
       await fetch('/api/my/businesses/' + biz._id, { method: 'DELETE', headers: { 'x-auth-token': token } });
       if (currentBizId === biz._id) clearStudioForm();
       loadMyListings();
     });
-    dropdown.appendChild(viewLink);
-    dropdown.appendChild(postsBtn);
-    dropdown.appendChild(jobsBtn);
     dropdown.appendChild(delBtn);
     menuBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -1322,18 +1347,20 @@ async function loadMyListings(isInitial){
     row.appendChild(categoryCell);
     row.appendChild(dateCell);
     row.appendChild(statusCell);
+    row.appendChild(quickCell);
     row.appendChild(menuCell);
     tbody.appendChild(row);
 
     const postsRow = document.createElement('tr');
     const postsCell = document.createElement('td');
-    postsCell.colSpan = 5;
+    postsCell.colSpan = 6;
     const postsPanel = document.createElement('div');
     postsPanel.style.cssText = 'display:none;padding:10px 0;';
     postsCell.appendChild(postsPanel);
     postsRow.appendChild(postsCell);
     postsRow.style.display = 'none';
-    postsBtn.addEventListener('click', () => {
+    postsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
       const isOpen = postsRow.style.display !== 'none';
       if (!isOpen){
         buildPostsPanel(postsPanel, biz);
@@ -1350,13 +1377,14 @@ async function loadMyListings(isInitial){
 
     const jobsRow = document.createElement('tr');
     const jobsCell = document.createElement('td');
-    jobsCell.colSpan = 5;
+    jobsCell.colSpan = 6;
     const jobsPanel = document.createElement('div');
     jobsPanel.style.cssText = 'display:none;padding:10px 0;';
     jobsCell.appendChild(jobsPanel);
     jobsRow.appendChild(jobsCell);
     jobsRow.style.display = 'none';
-    jobsBtn.addEventListener('click', () => {
+    jobsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
       const isOpen = jobsRow.style.display !== 'none';
       if (!isOpen){
         buildJobsPanel(jobsPanel, biz);
