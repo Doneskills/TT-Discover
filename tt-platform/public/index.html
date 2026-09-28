@@ -155,6 +155,29 @@
   .postItem { border-bottom: 1px solid var(--border); padding: 12px 0; }
   .postDate { font-size: 12px; color: var(--text-muted2); margin-bottom: 6px; }
   .aboutRowsWrap { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
+
+  /* ---------------- Reviews ---------------- */
+  .starsRow { color: #f2a33c; letter-spacing: 1px; }
+  .starsRow.big { font-size: 18px; }
+  .reviewSummary { font-size: 14px; margin-bottom: 14px; }
+  .reviewItem { border-bottom: 1px solid var(--border); padding: 12px 0; }
+  .reviewItemHead { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 2px; }
+  .ownerReply {
+    margin-top: 8px; padding: 8px 10px; background: var(--soft-bg); border-radius: 8px;
+    font-size: 13px; line-height: 1.4;
+  }
+  .ownerReplyForm { margin-top: 8px; }
+  .ownerReplyInput, .reviewFormInput {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--input-border); border-radius: 6px;
+    background: var(--input-bg); color: var(--text); font-size: 13px;
+  }
+  .ownerReplyInput { min-height: 50px; resize: vertical; margin-bottom: 6px; }
+  .ownerReplySubmit { width: auto; padding: 6px 12px; font-size: 12px; margin: 0; }
+  .reviewForm { margin-top: 4px; }
+  .reviewFormLabel { display: block; font-size: 12px; color: var(--text-muted2); margin-bottom: 4px; }
+  .reviewFormInput { margin-bottom: 10px; }
+  .starPicker { font-size: 26px; color: #f2a33c; letter-spacing: 4px; cursor: pointer; }
+  .starPickerStar { cursor: pointer; }
 </style>
 </head>
 <body>
@@ -231,11 +254,13 @@ document.getElementById('addBtn').addEventListener('click', () => {
   window.open('/account.html', '_blank');
 });
 
+let currentUserId = null;
 async function checkSignInStatus(){
   const token = localStorage.getItem('ttp_token');
   const avatar = document.getElementById('avatarLetter');
   const accountBtn = document.getElementById('accountBtn');
   if (!token){
+    currentUserId = null;
     avatar.textContent = '👤';
     accountBtn.classList.remove('signedIn');
     return { signedIn: false };
@@ -244,10 +269,12 @@ async function checkSignInStatus(){
     const res = await fetch('/api/me', { headers: { 'x-auth-token': token } });
     if (!res.ok) throw new Error('invalid session');
     const data = await res.json();
+    currentUserId = data.id;
     avatar.textContent = data.email[0].toUpperCase();
     accountBtn.classList.add('signedIn');
     return { signedIn: true, email: data.email };
   } catch (err) {
+    currentUserId = null;
     localStorage.removeItem('ttp_token');
     avatar.textContent = '👤';
     accountBtn.classList.remove('signedIn');
@@ -316,6 +343,36 @@ function formatHours(h){
 function activeDeals(biz){
   const now = new Date();
   return (biz.deals || []).filter(d => !d.endDate || new Date(d.endDate) >= now);
+}
+
+function ratingSummary(biz){
+  const reviews = biz.reviews || [];
+  if (!reviews.length) return { count: 0, avg: 0 };
+  const sum = reviews.reduce((s, r) => s + (r.rating || 0), 0);
+  return { count: reviews.length, avg: sum / reviews.length };
+}
+
+function starsHtml(rating){
+  const full = Math.round(rating);
+  return '★'.repeat(full) + '☆'.repeat(5 - full);
+}
+
+function reviewItemHtml(r, isOwner){
+  const replyHtml = r.reply
+    ? `<div class="ownerReply"><b>Business reply:</b> ${escapeHtml(r.reply.text)}</div>`
+    : (isOwner
+        ? `<div class="ownerReplyForm" data-review-id="${r._id}">
+            <textarea class="ownerReplyInput" placeholder="Write a reply..."></textarea>
+            <button type="button" class="ownerReplySubmit">Reply</button>
+            <div class="msg ownerReplyMsg"></div>
+          </div>`
+        : '');
+  return `<div class="reviewItem">
+    <div class="reviewItemHead"><span class="starsRow">${starsHtml(r.rating)}</span> <b>${escapeHtml(r.authorName)}</b></div>
+    <div class="postDate">${new Date(r.createdAt).toLocaleDateString()}</div>
+    <div class="desc">${escapeHtml(r.comment)}</div>
+    ${replyHtml}
+  </div>`;
 }
 
 function cardHtml(biz){
@@ -394,6 +451,7 @@ function renderDetailTabs(biz, activeTab){
   }).join('');
 
   let panelHtml = '';
+  const rating = ratingSummary(biz);
   if (activeTab === 'overview'){
     panelHtml = `
       <h2>${escapeHtml(biz.name)}</h2>
@@ -402,7 +460,7 @@ function renderDetailTabs(biz, activeTab){
       ${biz.hours ? `<div class="row"><b>Hours:</b> ${escapeHtml(formatHours(biz.hours))}</div>` : ''}
       <div class="desc">${escapeHtml(biz.description)}</div>
       ${(biz.photos && biz.photos.length) ? `<div class="overviewPhoto menuPhotoGrid">${biz.photos.map(u => `<img src="${u}">`).join('')}</div>` : (biz.imageUrl ? `<div class="overviewPhoto"><img src="${biz.imageUrl}"></div>` : '')}
-      <div class="row"><b>Rating:</b> ⭐ No ratings yet</div>
+      <div class="row"><b>Rating:</b> ${rating.count ? `<span class="starsRow">${starsHtml(rating.avg)}</span> ${rating.avg.toFixed(1)} (${rating.count} review${rating.count === 1 ? '' : 's'})` : '⭐ No ratings yet'}</div>
       ${deals.map(d => `<div class="dealBadge" style="margin-top:10px;display:block;width:fit-content;">🔥 ${escapeHtml(d.title)}</div><div class="desc">${escapeHtml(d.description)}</div>`).join('')}
     `;
   } else if (activeTab === 'posts'){
@@ -448,7 +506,31 @@ function renderDetailTabs(biz, activeTab){
         : `<div class="emptyState">No highlight photos yet.</div>`}
     `;
   } else if (activeTab === 'review'){
-    panelHtml = `<div class="emptyState">No reviews yet — reviews are coming soon!</div>`;
+    const reviews = biz.reviews || [];
+    const isOwner = !!(currentUserId && biz.ownerId === currentUserId);
+    panelHtml = `
+      <div class="reviewSummary">
+        ${rating.count
+          ? `<span class="starsRow big">${starsHtml(rating.avg)}</span> <b>${rating.avg.toFixed(1)}</b> out of 5 · ${rating.count} review${rating.count === 1 ? '' : 's'}`
+          : 'No reviews yet — be the first!'}
+      </div>
+      <div id="reviewList">
+        ${reviews.length ? reviews.map(r => reviewItemHtml(r, isOwner)).join('') : ''}
+      </div>
+      <h3 style="font-size:14px;margin:18px 0 8px;">Leave a Review</h3>
+      <div class="reviewForm">
+        <label class="reviewFormLabel">Your Name (optional)</label>
+        <input type="text" id="reviewAuthorInput" placeholder="Anonymous" class="reviewFormInput">
+        <label class="reviewFormLabel">Rating</label>
+        <div id="starPicker" class="starPicker" data-value="0">
+          ${[1,2,3,4,5].map(n => `<span class="starPickerStar" data-star="${n}">☆</span>`).join('')}
+        </div>
+        <label class="reviewFormLabel" style="margin-top:10px;">Comment</label>
+        <textarea id="reviewCommentInput" placeholder="Share your experience..." class="reviewFormInput" style="min-height:70px;resize:vertical;"></textarea>
+        <button id="submitReviewBtn" style="margin-top:10px;">Submit Review</button>
+        <div class="msg" id="reviewMsg"></div>
+      </div>
+    `;
   } else if (activeTab === 'about'){
     const about = biz.about || {};
     const social = biz.social || {};
@@ -487,7 +569,81 @@ function renderDetailTabs(biz, activeTab){
   document.querySelectorAll('.detailTabBtn').forEach(btn => {
     btn.addEventListener('click', () => renderDetailTabs(biz, btn.dataset.tab));
   });
+  if (activeTab === 'review') wireReviewTab(biz);
 }
+
+function wireReviewTab(biz){
+  const picker = document.getElementById('starPicker');
+  picker.querySelectorAll('.starPickerStar').forEach(star => {
+    star.addEventListener('click', () => {
+      const val = Number(star.dataset.star);
+      picker.dataset.value = val;
+      picker.querySelectorAll('.starPickerStar').forEach(s => {
+        s.textContent = Number(s.dataset.star) <= val ? '★' : '☆';
+      });
+    });
+  });
+
+  document.getElementById('submitReviewBtn').addEventListener('click', async () => {
+    const msg = document.getElementById('reviewMsg');
+    const rating = Number(picker.dataset.value);
+    const comment = document.getElementById('reviewCommentInput').value.trim();
+    if (!rating){ msg.textContent = 'Please pick a star rating.'; return; }
+    if (!comment){ msg.textContent = 'Please write a comment.'; return; }
+    msg.textContent = 'Submitting...';
+    try {
+      const res = await fetch(`/api/businesses/${biz._id}/reviews`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          authorName: document.getElementById('reviewAuthorInput').value.trim(),
+          rating,
+          comment
+        })
+      });
+      const data = await res.json();
+      if (res.ok){
+        biz.reviews = biz.reviews || [];
+        biz.reviews.unshift(data.review);
+        const idx = allBusinesses.findIndex(b => b._id === biz._id);
+        if (idx !== -1) allBusinesses[idx] = biz;
+        renderDetailTabs(biz, 'review');
+      } else {
+        msg.textContent = data.error || 'Could not submit your review.';
+      }
+    } catch (err) {
+      msg.textContent = 'Something went wrong — please try again.';
+    }
+  });
+
+  document.querySelectorAll('.ownerReplyForm').forEach(form => {
+    form.querySelector('.ownerReplySubmit').addEventListener('click', async () => {
+      const msg = form.querySelector('.ownerReplyMsg');
+      const text = form.querySelector('.ownerReplyInput').value.trim();
+      if (!text){ msg.textContent = 'Please write a reply.'; return; }
+      const token = localStorage.getItem('ttp_token');
+      msg.textContent = 'Saving...';
+      try {
+        const res = await fetch(`/api/my/businesses/${biz._id}/reviews/${form.dataset.reviewId}/reply`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+          body: JSON.stringify({ text })
+        });
+        const data = await res.json();
+        if (res.ok){
+          const rev = (biz.reviews || []).find(r => r._id === form.dataset.reviewId);
+          if (rev) rev.reply = data.reply;
+          renderDetailTabs(biz, 'review');
+        } else {
+          msg.textContent = data.error || 'Could not save your reply.';
+        }
+      } catch (err) {
+        msg.textContent = 'Something went wrong — please try again.';
+      }
+    });
+  });
+}
+
 function closeDetail(){
   document.getElementById('detailModal').classList.remove('open');
   document.body.style.overflow = '';

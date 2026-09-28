@@ -334,6 +334,7 @@ app.get('/api/me', requireUser, async (req, res) => {
     user.plan = 'free';
   }
   res.json({
+    id: user._id.toString(),
     email: user.email,
     accountType: user.accountType === 'customer' ? 'customer' : 'business',
     preferredArea: user.preferredArea || null,
@@ -665,6 +666,56 @@ app.delete('/api/my/businesses/:id/jobs/:jobId', requireUser, requireBusinessAcc
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Could not delete job listing.' });
+  }
+});
+
+// Reviews are public — anyone can leave one, no account required.
+app.post('/api/businesses/:id/reviews', async (req, res) => {
+  if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
+  try {
+    const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
+    if (!biz) return res.status(404).json({ error: 'Business not found.' });
+    const b = req.body || {};
+    const rating = Math.round(Number(b.rating));
+    if (!rating || rating < 1 || rating > 5){
+      return res.status(400).json({ error: 'A star rating from 1 to 5 is required.' });
+    }
+    const comment = String(b.comment || '').trim().slice(0, 1000);
+    if (!comment) return res.status(400).json({ error: 'A comment is required.' });
+    const review = {
+      _id: new ObjectId(),
+      authorName: String(b.authorName || '').trim().slice(0, 60) || 'Anonymous',
+      rating,
+      comment,
+      createdAt: new Date(),
+      reply: null
+    };
+    await businessesCol.updateOne({ _id: biz._id }, { $push: { reviews: { $each: [review], $position: 0 } } });
+    res.json({ ok: true, review });
+  } catch (err) {
+    res.status(500).json({ error: 'Could not submit review.' });
+  }
+});
+
+// Owner reply to a review on their own business — one reply per review.
+app.post('/api/my/businesses/:id/reviews/:reviewId/reply', requireUser, requireBusinessAccount, async (req, res) => {
+  if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
+  try {
+    const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
+    if (!biz || biz.ownerId !== req.user._id.toString()){
+      return res.status(403).json({ error: 'You can only reply to reviews on your own listing.' });
+    }
+    const text = String((req.body || {}).text || '').trim().slice(0, 600);
+    if (!text) return res.status(400).json({ error: 'A reply message is required.' });
+    const reply = { text, createdAt: new Date() };
+    const result = await businessesCol.updateOne(
+      { _id: biz._id, 'reviews._id': new ObjectId(req.params.reviewId) },
+      { $set: { 'reviews.$.reply': reply } }
+    );
+    if (!result.matchedCount) return res.status(404).json({ error: 'Review not found.' });
+    res.json({ ok: true, reply });
+  } catch (err) {
+    res.status(500).json({ error: 'Could not save reply.' });
   }
 });
 
