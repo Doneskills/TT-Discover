@@ -212,6 +212,21 @@ app.get('/api/businesses/:id', async (req, res) => {
   }
 });
 
+// Records one page view for today (UTC date key) — fire-and-forget from the client.
+app.post('/api/businesses/:id/view', async (req, res) => {
+  if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    await businessesCol.updateOne(
+      { _id: new ObjectId(req.params.id) },
+      { $inc: { [`viewsByDay.${today}`]: 1 } }
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Could not record view.' });
+  }
+});
+
 function escapeHtml(s){
   return String(s || '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -227,6 +242,9 @@ app.get('/biz/:id', async (req, res) => {
     biz = null;
   }
   if (!biz) return res.status(404).send('<h1>Listing not found</h1><a href="/">Back to TT Discover</a>');
+
+  const today = new Date().toISOString().slice(0, 10);
+  businessesCol.updateOne({ _id: biz._id }, { $inc: { [`viewsByDay.${today}`]: 1 } }).catch(() => {});
 
   const now = new Date();
   const activeDeals = (biz.deals || []).filter(d => !d.endDate || new Date(d.endDate) >= now);

@@ -440,6 +440,7 @@ function openDetail(id){
   document.getElementById('detailModal').classList.add('open');
   document.getElementById('detailModal').scrollTop = 0;
   document.body.style.overflow = 'hidden';
+  fetch(`/api/businesses/${id}/view`, { method: 'POST' }).catch(() => {});
 }
 
 function renderDetailTabs(biz, activeTab){
