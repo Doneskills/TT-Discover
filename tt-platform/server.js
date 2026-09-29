@@ -184,6 +184,44 @@ function requireBusinessAccount(req, res, next){
   next();
 }
 
+// Allows either the business owner (x-auth-token) OR a staff member with the
+// matching permission (x-staff-token) to proceed. Attaches req.biz either way,
+// so handlers don't need to re-fetch or re-check ownership themselves.
+function requireBizPermission(permission){
+  return async function(req, res, next){
+    if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
+    let biz;
+    try {
+      biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
+    } catch (err) {
+      return res.status(404).json({ error: 'Business not found.' });
+    }
+    if (!biz) return res.status(404).json({ error: 'Business not found.' });
+
+    const ownerToken = req.headers['x-auth-token'];
+    if (ownerToken && usersCol){
+      const user = await usersCol.findOne({ sessionToken: ownerToken });
+      if (user && biz.ownerId === user._id.toString()){
+        req.biz = biz;
+        req.actor = { type: 'owner' };
+        return next();
+      }
+    }
+
+    const staffToken = req.headers['x-staff-token'];
+    if (staffToken){
+      const staffMember = (biz.staff || []).find(s => s.sessionToken === staffToken);
+      if (staffMember && staffMember.permissions && staffMember.permissions[permission]){
+        req.biz = biz;
+        req.actor = { type: 'staff', staffMember };
+        return next();
+      }
+    }
+
+    return res.status(403).json({ error: 'You do not have permission to do that.' });
+  };
+}
+
 // ---------------- Public API ----------------
 app.get('/api/businesses', async (req, res) => {
   if (!businessesCol) return res.json([]);
@@ -234,7 +272,7 @@ app.get('/api/businesses', async (req, res) => {
         }
       },
       { $sort: { isFeatured: -1, name: 1 } },
-      { $project: { ownerInfo: 0, ownerIsPremium: 0 } }
+      { $project: { ownerInfo: 0, ownerIsPremium: 0, staff: 0 } }
     ]).toArray();
 
     res.json(list);
@@ -247,7 +285,7 @@ app.get('/api/businesses', async (req, res) => {
 app.get('/api/businesses/:id', async (req, res) => {
   if (!businessesCol) return res.status(404).json({ error: 'Not found' });
   try {
-    const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
+    const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) }, { projection: { staff: 0 } });
     if (!biz) return res.status(404).json({ error: 'Not found' });
     res.json(biz);
   } catch (err) {
@@ -536,12 +574,22 @@ app.post('/api/premium/paypal/confirm', requireUser, async (req, res) => {
   }
 });
 
+// Strips staff credentials before sending a business doc to the browser.
+function publicBiz(biz){
+  if (!biz) return biz;
+  const out = { ...biz };
+  if (Array.isArray(out.staff)){
+    out.staff = out.staff.map(s => ({ _id: s._id, email: s.email, permissions: s.permissions, createdAt: s.createdAt }));
+  }
+  return out;
+}
+
 // ---------------- Self-service business listings (signed-in owners) ----------------
 app.get('/api/my/businesses', requireUser, async (req, res) => {
   if (!businessesCol) return res.json([]);
   try {
     const list = await businessesCol.find({ ownerId: req.user._id.toString() }).sort({ name: 1 }).toArray();
-    res.json(list);
+    res.json(list.map(publicBiz));
   } catch (err) {
     res.json([]);
   }
@@ -668,13 +716,9 @@ app.patch('/api/my/businesses/:id/hiring', requireUser, requireBusinessAccount, 
   }
 });
 
-app.post('/api/my/businesses/:id/posts', requireUser, requireBusinessAccount, async (req, res) => {
-  if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
+app.post('/api/my/businesses/:id/posts', requireBizPermission('posts'), async (req, res) => {
   try {
-    const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
-    if (!biz || biz.ownerId !== req.user._id.toString()){
-      return res.status(403).json({ error: 'You can only post to your own listing.' });
-    }
+    const biz = req.biz;
     const b = req.body || {};
     const title = String(b.title || '').trim().slice(0, 100);
     if (!title) return res.status(400).json({ error: 'A post title is required.' });
@@ -692,19 +736,15 @@ app.post('/api/my/businesses/:id/posts', requireUser, requireBusinessAccount, as
   }
 });
 
-app.delete('/api/my/businesses/:id/posts/:postId', requireUser, requireBusinessAccount, async (req, res) => {
-  if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
+app.delete('/api/my/businesses/:id/posts/:postId', requireBizPermission('posts'), async (req, res) => {
   try {
-    const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
-    if (!biz || biz.ownerId !== req.user._id.toString()){
-      return res.status(403).json({ error: 'You can only edit your own listing.' });
-    }
-    await businessesCol.updateOne({ _id: biz._id }, { $pull: { posts: { _id: new ObjectId(req.params.postId) } } });
+    await businessesCol.updateOne({ _id: req.biz._id }, { $pull: { posts: { _id: new ObjectId(req.params.postId) } } });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Could not delete post.' });
   }
 });
+
 
 app.post('/api/my/businesses/:id/jobs', requireUser, requireBusinessAccount, async (req, res) => {
   if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
@@ -799,13 +839,9 @@ app.post('/api/my/businesses/:id/reviews/:reviewId/reply', requireUser, requireB
 });
 
 // Post a new deal on an existing business — emails customers who follow that area.
-app.post('/api/my/businesses/:id/deals', requireUser, requireBusinessAccount, async (req, res) => {
-  if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
+app.post('/api/my/businesses/:id/deals', requireBizPermission('deals'), async (req, res) => {
   try {
-    const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
-    if (!biz || biz.ownerId !== req.user._id.toString()){
-      return res.status(403).json({ error: 'You can only post deals for your own listing.' });
-    }
+    const biz = req.biz;
     const b = req.body || {};
     const title = String(b.title || '').trim().slice(0, 100);
     if (!title) return res.status(400).json({ error: 'A deal title is required.' });
@@ -830,18 +866,116 @@ app.post('/api/my/businesses/:id/deals', requireUser, requireBusinessAccount, as
   }
 });
 
-app.delete('/api/my/businesses/:id/deals/:dealId', requireUser, requireBusinessAccount, async (req, res) => {
-  if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
+app.delete('/api/my/businesses/:id/deals/:dealId', requireBizPermission('deals'), async (req, res) => {
   try {
-    const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
-    if (!biz || biz.ownerId !== req.user._id.toString()){
-      return res.status(403).json({ error: 'You can only edit your own listing.' });
-    }
-    await businessesCol.updateOne({ _id: biz._id }, { $pull: { deals: { _id: new ObjectId(req.params.dealId) } } });
+    await businessesCol.updateOne({ _id: req.biz._id }, { $pull: { deals: { _id: new ObjectId(req.params.dealId) } } });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Could not delete deal.' });
   }
+});
+
+// ---------------- Staff (owner manages, staff log in separately) ----------------
+// Owner adds a staff member with a password they set and specific permissions.
+app.post('/api/my/businesses/:id/staff', requireUser, requireBusinessAccount, async (req, res) => {
+  if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
+  try {
+    const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
+    if (!biz || biz.ownerId !== req.user._id.toString()){
+      return res.status(403).json({ error: 'You can only manage staff on your own listing.' });
+    }
+    const b = req.body || {};
+    const email = String(b.email || '').trim().toLowerCase().slice(0, 150);
+    const password = String(b.password || '');
+    if (!email || !email.includes('@')) return res.status(400).json({ error: 'A valid email is required.' });
+    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+    if ((biz.staff || []).some(s => s.email === email)){
+      return res.status(400).json({ error: 'A staff member with that email already exists on this business.' });
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    const staffMember = {
+      _id: new ObjectId(),
+      email,
+      passwordHash,
+      permissions: { posts: !!b.posts, deals: !!b.deals },
+      sessionToken: null,
+      createdAt: new Date()
+    };
+    await businessesCol.updateOne({ _id: biz._id }, { $push: { staff: staffMember } });
+    res.json({ ok: true, staff: { _id: staffMember._id, email, permissions: staffMember.permissions, createdAt: staffMember.createdAt } });
+  } catch (err) {
+    res.status(500).json({ error: 'Could not add staff member.' });
+  }
+});
+
+app.delete('/api/my/businesses/:id/staff/:staffId', requireUser, requireBusinessAccount, async (req, res) => {
+  if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
+  try {
+    const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
+    if (!biz || biz.ownerId !== req.user._id.toString()){
+      return res.status(403).json({ error: 'You can only manage staff on your own listing.' });
+    }
+    await businessesCol.updateOne({ _id: biz._id }, { $pull: { staff: { _id: new ObjectId(req.params.staffId) } } });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Could not remove staff member.' });
+  }
+});
+
+// Staff sign in with the email/password their employer set for them.
+app.post('/api/staff/login', async (req, res) => {
+  if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
+  try {
+    const email = String((req.body || {}).email || '').trim().toLowerCase();
+    const password = String((req.body || {}).password || '');
+    if (!email || !password) return res.status(400).json({ error: 'Email and password are required.' });
+    const biz = await businessesCol.findOne({ 'staff.email': email });
+    if (!biz) return res.status(401).json({ error: 'Incorrect email or password.' });
+    const staffMember = (biz.staff || []).find(s => s.email === email);
+    const ok = staffMember && await bcrypt.compare(password, staffMember.passwordHash);
+    if (!ok) return res.status(401).json({ error: 'Incorrect email or password.' });
+    const sessionToken = crypto.randomBytes(24).toString('hex');
+    await businessesCol.updateOne(
+      { _id: biz._id, 'staff._id': staffMember._id },
+      { $set: { 'staff.$.sessionToken': sessionToken } }
+    );
+    res.json({
+      token: sessionToken,
+      businessId: biz._id,
+      businessName: biz.name,
+      permissions: staffMember.permissions
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Could not sign in.' });
+  }
+});
+
+app.get('/api/staff/me', async (req, res) => {
+  if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
+  const token = req.headers['x-staff-token'];
+  if (!token) return res.status(401).json({ error: 'Not signed in.' });
+  try {
+    const biz = await businessesCol.findOne({ 'staff.sessionToken': token });
+    if (!biz) return res.status(401).json({ error: 'Not signed in.' });
+    const staffMember = (biz.staff || []).find(s => s.sessionToken === token);
+    res.json({
+      businessId: biz._id,
+      businessName: biz.name,
+      email: staffMember.email,
+      permissions: staffMember.permissions
+    });
+  } catch (err) {
+    res.status(401).json({ error: 'Not signed in.' });
+  }
+});
+
+app.post('/api/staff/logout', async (req, res) => {
+  if (!businessesCol) return res.json({ ok: true });
+  const token = req.headers['x-staff-token'];
+  if (token){
+    await businessesCol.updateOne({ 'staff.sessionToken': token }, { $set: { 'staff.$.sessionToken': null } }).catch(() => {});
+  }
+  res.json({ ok: true });
 });
 
 // ---------------- Admin API (password protected) ----------------
