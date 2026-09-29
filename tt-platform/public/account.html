@@ -220,8 +220,8 @@
   }
   #studioMain { flex: 1; padding: 20px 32px; min-width: 0; max-width: 720px; }
   #studioMain h2 { font-size: 19px; margin-bottom: 12px; }
-  #studioListingsPanel, #studioAnalyticsPanel { padding: 24px 32px; width: 100%; }
-  #studioListingsPanel .card, #studioAnalyticsPanel .card { max-width: none; }
+  #studioListingsPanel, #studioAnalyticsPanel, #studioDealsPanel { padding: 24px 32px; width: 100%; }
+  #studioListingsPanel .card, #studioAnalyticsPanel .card, #studioDealsPanel .card { max-width: none; }
   .bizTable tr[data-bizrow]:hover { background: var(--soft-bg); cursor: pointer; }
 
   /* ---------------- Analytics ---------------- */
@@ -247,6 +247,8 @@
   }
   .analyticsTotal { font-size: 24px; font-weight: 700; margin-bottom: 2px; }
   .analyticsSubLabel { font-size: 12px; color: var(--text-muted); margin-bottom: 18px; }
+  .dealListItem { border-bottom: 1px solid var(--border); padding: 12px 0; display: flex; justify-content: space-between; gap: 10px; }
+  .dealListItem .dealDelBtn { width: auto; margin: 0; padding: 6px 12px; font-size: 12px; background: #7a2c2c; }
   .studioField { display: none; }
   .studioField.active { display: block; }
   @media (max-width: 640px) {
@@ -311,6 +313,7 @@
       <button id="studioNewBtn" class="secondary" style="width:auto;padding:8px 14px;font-size:13px;margin:0;">+ New Business</button>
       <button id="studioListingsBtn" class="secondary" style="width:auto;padding:8px 14px;font-size:13px;margin:0;">📋 Your Businesses</button>
       <button id="studioAnalyticsBtn" class="secondary" style="width:auto;padding:8px 14px;font-size:13px;margin:0;">📊 Analytics</button>
+      <button id="studioDealsBtn" class="secondary" style="width:auto;padding:8px 14px;font-size:13px;margin:0;">🔥 Deals</button>
       <div class="studioAvatar" id="studioTopAvatar"></div>
     </div>
 
@@ -441,6 +444,25 @@
         <button type="button" id="studioAnalyticsClose" class="secondary" style="width:auto;padding:6px 12px;font-size:12px;margin-bottom:10px;">← Back to Studio</button>
         <h2>Analytics</h2>
         <div id="analyticsBody"><p style="color:#999;font-size:13px;">Loading...</p></div>
+      </div>
+    </div>
+
+    <div id="studioDealsPanel" style="display:none;">
+      <div class="card">
+        <button type="button" id="studioDealsClose" class="secondary" style="width:auto;padding:6px 12px;font-size:12px;margin-bottom:10px;">← Back to Studio</button>
+        <h2>Deals</h2>
+        <p style="font-size:13px;color:var(--text-muted2);margin-bottom:14px;">Posting a new deal here emails customers following your area.</p>
+        <label>Deal Title</label>
+        <input type="text" id="newDealTitle" placeholder="e.g. 20% off lunch specials">
+        <label>Description</label>
+        <textarea id="newDealDescription"></textarea>
+        <label>Ends (optional)</label>
+        <input type="date" id="newDealEndDate">
+        <button id="postDealBtn" style="margin-top:10px;">Post Deal</button>
+        <div class="msg" id="dealMsg"></div>
+        <hr style="border:none;border-top:1px solid var(--border);margin:20px 0;">
+        <h3 style="font-size:15px;margin-bottom:10px;">Current Deals</h3>
+        <div id="dealsList"><p style="color:#999;font-size:13px;">Loading...</p></div>
       </div>
     </div>
   </div>
@@ -833,6 +855,77 @@ document.getElementById('studioAnalyticsBtn').addEventListener('click', () => {
 document.getElementById('studioAnalyticsClose').addEventListener('click', () => {
   document.getElementById('studioAnalyticsPanel').style.display = 'none';
   document.getElementById('studioBody').style.display = 'flex';
+});
+
+document.getElementById('studioDealsBtn').addEventListener('click', () => {
+  document.getElementById('studioBody').style.display = 'none';
+  document.getElementById('studioDealsPanel').style.display = 'block';
+  loadDeals();
+});
+document.getElementById('studioDealsClose').addEventListener('click', () => {
+  document.getElementById('studioDealsPanel').style.display = 'none';
+  document.getElementById('studioBody').style.display = 'flex';
+});
+
+async function loadDeals(){
+  const box = document.getElementById('dealsList');
+  box.innerHTML = '<p style="color:#999;font-size:13px;">Loading...</p>';
+  if (!currentBizId){
+    box.innerHTML = '<p style="color:#999;font-size:13px;">Create a business first to post deals.</p>';
+    return;
+  }
+  const res = await fetch('/api/my/businesses', { headers: { 'x-auth-token': token } });
+  const list = await res.json();
+  const biz = list.find(b => b._id === currentBizId);
+  const deals = (biz && biz.deals) || [];
+  box.innerHTML = deals.length ? '' : '<p style="color:#999;font-size:13px;">No deals posted yet.</p>';
+  deals.forEach(deal => {
+    const row = document.createElement('div');
+    row.className = 'dealListItem';
+    const endText = deal.endDate ? ` · ends ${new Date(deal.endDate).toLocaleDateString()}` : '';
+    row.innerHTML = `<div>
+      <b>${escapeHtml(deal.title)}</b>
+      <div style="font-size:13px;color:var(--text-muted2);">${escapeHtml(deal.description || '')}</div>
+      <div class="postDate">${new Date(deal.createdAt || Date.now()).toLocaleDateString()}${endText}</div>
+    </div>`;
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'dealDelBtn';
+    delBtn.textContent = 'Delete';
+    delBtn.addEventListener('click', async () => {
+      await fetch(`/api/my/businesses/${currentBizId}/deals/${deal._id}`, { method: 'DELETE', headers: { 'x-auth-token': token } });
+      loadDeals();
+    });
+    row.appendChild(delBtn);
+    box.appendChild(row);
+  });
+}
+
+document.getElementById('postDealBtn').addEventListener('click', async () => {
+  const msg = document.getElementById('dealMsg');
+  if (!currentBizId){ msg.textContent = 'Create a business first.'; return; }
+  const title = document.getElementById('newDealTitle').value.trim();
+  if (!title){ msg.textContent = 'A deal title is required.'; return; }
+  msg.textContent = 'Posting...';
+  const res = await fetch(`/api/my/businesses/${currentBizId}/deals`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+    body: JSON.stringify({
+      title,
+      description: document.getElementById('newDealDescription').value.trim(),
+      endDate: document.getElementById('newDealEndDate').value
+    })
+  });
+  const data = await res.json();
+  if (res.ok){
+    msg.textContent = '';
+    document.getElementById('newDealTitle').value = '';
+    document.getElementById('newDealDescription').value = '';
+    document.getElementById('newDealEndDate').value = '';
+    loadDeals();
+  } else {
+    msg.textContent = data.error || 'Could not post deal.';
+  }
 });
 
 async function loadAnalytics(){

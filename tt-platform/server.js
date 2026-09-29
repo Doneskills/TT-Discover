@@ -2,11 +2,54 @@ const express = require('express');
 const path = require('path');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
+const nodemailer = require('nodemailer');
 const { MongoClient, ObjectId } = require('mongodb');
 
 const app = express();
 app.use(express.json({ limit: '25mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// ---------------- Email notifications ----------------
+// Configure via env vars: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM.
+// Works with Gmail, SendGrid/Mailgun SMTP relay, or any standard SMTP provider.
+// Until these are set, emails are just logged to the console instead of sent —
+// nothing breaks, this just quietly does nothing until credentials are added.
+let mailTransporter = null;
+if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS){
+  mailTransporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT) || 587,
+    secure: Number(process.env.SMTP_PORT) === 465,
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+  });
+} else {
+  console.log('Email notifications: SMTP_HOST/SMTP_USER/SMTP_PASS not set — emails will be logged, not sent.');
+}
+const MAIL_FROM = process.env.SMTP_FROM || 'TT Discover <notifications@ttdiscover.example>';
+
+async function sendMail(to, subject, html){
+  if (!mailTransporter){
+    console.log(`[email not sent — no SMTP configured] To: ${to} | Subject: ${subject}`);
+    return;
+  }
+  try {
+    await mailTransporter.sendMail({ from: MAIL_FROM, to, subject, html });
+  } catch (err) {
+    console.error(`Email to ${to} failed:`, err.message);
+  }
+}
+
+// Notifies every customer account whose chosen area matches, one email each.
+// A failed send for one customer never blocks the others.
+async function notifyAreaCustomers(area, subject, buildHtml){
+  if (!usersCol || !area) return;
+  try {
+    const customers = await usersCol.find({ accountType: 'customer', preferredArea: area }).toArray();
+    await Promise.all(customers.map(c => sendMail(c.email, subject, buildHtml(c))));
+  } catch (err) {
+    console.error('notifyAreaCustomers failed:', err.message);
+  }
+}
 
 // Photo arrays: up to 10 images, stored as data URLs (already resized/compressed client-side).
 // Used for both the business's own photo gallery and its menu photos.
@@ -539,7 +582,25 @@ app.post('/api/my/businesses', requireUser, requireBusinessAccount, async (req, 
       });
     }
     const result = await businessesCol.insertOne(doc);
-    res.json({ ok: true, id: result.insertedId, business: { ...doc, _id: result.insertedId } });
+    const business = { ...doc, _id: result.insertedId };
+    res.json({ ok: true, id: result.insertedId, business });
+    notifyAreaCustomers(
+      doc.area,
+      `New business added in ${doc.area}: ${doc.name}`,
+      () => `<p>A new business just joined TT Discover in <b>${doc.area}</b>:</p>
+             <h3>${doc.name}</h3>
+             <p>${doc.description || ''}</p>
+             <p>Category: ${doc.category}</p>`
+    );
+    if (doc.deals.length){
+      notifyAreaCustomers(
+        doc.area,
+        `New deal at ${doc.name}: ${doc.deals[0].title}`,
+        () => `<p><b>${doc.name}</b> in ${doc.area} just posted a new deal:</p>
+               <h3>${doc.deals[0].title}</h3>
+               <p>${doc.deals[0].description || ''}</p>`
+      );
+    }
   } catch (err) {
     console.error('Add business failed:', err.message);
     res.status(500).json({ error: 'Could not add business.' });
@@ -734,6 +795,52 @@ app.post('/api/my/businesses/:id/reviews/:reviewId/reply', requireUser, requireB
     res.json({ ok: true, reply });
   } catch (err) {
     res.status(500).json({ error: 'Could not save reply.' });
+  }
+});
+
+// Post a new deal on an existing business — emails customers who follow that area.
+app.post('/api/my/businesses/:id/deals', requireUser, requireBusinessAccount, async (req, res) => {
+  if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
+  try {
+    const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
+    if (!biz || biz.ownerId !== req.user._id.toString()){
+      return res.status(403).json({ error: 'You can only post deals for your own listing.' });
+    }
+    const b = req.body || {};
+    const title = String(b.title || '').trim().slice(0, 100);
+    if (!title) return res.status(400).json({ error: 'A deal title is required.' });
+    const deal = {
+      _id: new ObjectId(),
+      title,
+      description: String(b.description || '').trim().slice(0, 300),
+      endDate: b.endDate ? new Date(b.endDate) : null,
+      createdAt: new Date()
+    };
+    await businessesCol.updateOne({ _id: biz._id }, { $push: { deals: { $each: [deal], $position: 0 } } });
+    res.json({ ok: true, deal });
+    notifyAreaCustomers(
+      biz.area,
+      `New deal at ${biz.name}: ${deal.title}`,
+      () => `<p><b>${biz.name}</b> in ${biz.area} just posted a new deal:</p>
+             <h3>${deal.title}</h3>
+             <p>${deal.description || ''}</p>`
+    );
+  } catch (err) {
+    res.status(500).json({ error: 'Could not post deal.' });
+  }
+});
+
+app.delete('/api/my/businesses/:id/deals/:dealId', requireUser, requireBusinessAccount, async (req, res) => {
+  if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
+  try {
+    const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
+    if (!biz || biz.ownerId !== req.user._id.toString()){
+      return res.status(403).json({ error: 'You can only edit your own listing.' });
+    }
+    await businessesCol.updateOne({ _id: biz._id }, { $pull: { deals: { _id: new ObjectId(req.params.dealId) } } });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Could not delete deal.' });
   }
 });
 
