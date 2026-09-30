@@ -220,8 +220,8 @@
   }
   #studioMain { flex: 1; padding: 20px 32px; min-width: 0; max-width: 720px; }
   #studioMain h2 { font-size: 19px; margin-bottom: 12px; }
-  #studioListingsPanel, #studioAnalyticsPanel, #studioDealsPanel, #studioStaffPanel { padding: 24px 32px; width: 100%; }
-  #studioListingsPanel .card, #studioAnalyticsPanel .card, #studioDealsPanel .card, #studioStaffPanel .card { max-width: none; }
+  #studioListingsPanel, #studioAnalyticsPanel, #studioDealsPanel, #studioStaffPanel, #studioCollabPanel { padding: 24px 32px; width: 100%; }
+  #studioListingsPanel .card, #studioAnalyticsPanel .card, #studioDealsPanel .card, #studioStaffPanel .card, #studioCollabPanel .card { max-width: none; }
   .bizTable tr[data-bizrow]:hover { background: var(--soft-bg); cursor: pointer; }
 
   /* ---------------- Analytics ---------------- */
@@ -373,6 +373,7 @@
       <button id="studioAnalyticsBtn" class="secondary" style="width:auto;padding:8px 14px;font-size:13px;margin:0;">📊 Analytics</button>
       <button id="studioDealsBtn" class="secondary" style="width:auto;padding:8px 14px;font-size:13px;margin:0;">🔥 Deals</button>
       <button id="studioStaffBtn" class="secondary" style="width:auto;padding:8px 14px;font-size:13px;margin:0;">👥 Staff</button>
+      <button id="studioCollabBtn" class="secondary" style="width:auto;padding:8px 14px;font-size:13px;margin:0;">🤝 Collaborators</button>
       <div class="studioAvatar" id="studioTopAvatar"></div>
     </div>
 
@@ -545,6 +546,21 @@
         <hr style="border:none;border-top:1px solid var(--border);margin:20px 0;">
         <h3 style="font-size:15px;margin-bottom:10px;">Current Staff</h3>
         <div id="staffList"><p style="color:#999;font-size:13px;">Loading...</p></div>
+      </div>
+    </div>
+
+    <div id="studioCollabPanel" style="display:none;">
+      <div class="card">
+        <button type="button" id="studioCollabClose" class="secondary" style="width:auto;padding:6px 12px;font-size:12px;margin-bottom:10px;">← Back to Studio</button>
+        <h2>Collaborators</h2>
+        <p style="font-size:13px;color:var(--text-muted2);margin-bottom:14px;">A collaborator gets full access to edit this business — info, photos, hours, posts, jobs, deals, and staff — using their own TT Discover business account. Only you can add, remove, or delete the listing itself.</p>
+        <label>Their Email (must already have a TT Discover business account)</label>
+        <input type="email" id="newCollabEmail">
+        <button id="addCollabBtn" style="margin-top:10px;">Add Collaborator</button>
+        <div class="msg" id="collabMsg"></div>
+        <hr style="border:none;border-top:1px solid var(--border);margin:20px 0;">
+        <h3 style="font-size:15px;margin-bottom:10px;">Current Collaborators</h3>
+        <div id="collabList"><p style="color:#999;font-size:13px;">Loading...</p></div>
       </div>
     </div>
   </div>
@@ -1348,6 +1364,70 @@ document.getElementById('addStaffBtn').addEventListener('click', async () => {
   }
 });
 
+// ---------------- Owner: manage collaborators (co-owners) ----------------
+document.getElementById('studioCollabBtn').addEventListener('click', () => {
+  document.getElementById('studioBody').style.display = 'none';
+  document.getElementById('studioCollabPanel').style.display = 'block';
+  loadCollabList();
+});
+document.getElementById('studioCollabClose').addEventListener('click', () => {
+  document.getElementById('studioCollabPanel').style.display = 'none';
+  document.getElementById('studioBody').style.display = 'flex';
+});
+
+async function loadCollabList(){
+  const box = document.getElementById('collabList');
+  box.innerHTML = '<p style="color:#999;font-size:13px;">Loading...</p>';
+  if (!currentBizId){
+    box.innerHTML = '<p style="color:#999;font-size:13px;">Create a business first to add collaborators.</p>';
+    return;
+  }
+  const res = await fetch('/api/my/businesses', { headers: { 'x-auth-token': token } });
+  const list = await res.json();
+  const biz = list.find(b => b._id === currentBizId);
+  const collabs = (biz && biz.collaborators) || [];
+  box.innerHTML = collabs.length ? '' : '<p style="color:#999;font-size:13px;">No collaborators yet.</p>';
+  collabs.forEach(c => {
+    const row = document.createElement('div');
+    row.className = 'staffListItem';
+    row.innerHTML = `<div>
+      <b>${escapeHtml(c.email)}</b>
+      <div class="postDate">Added ${new Date(c.addedAt).toLocaleDateString()}</div>
+    </div>`;
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'staffDelBtn';
+    delBtn.textContent = 'Remove';
+    delBtn.addEventListener('click', async () => {
+      await fetch(`/api/my/businesses/${currentBizId}/collaborators/${c.userId}`, { method: 'DELETE', headers: { 'x-auth-token': token } });
+      loadCollabList();
+    });
+    row.appendChild(delBtn);
+    box.appendChild(row);
+  });
+}
+
+document.getElementById('addCollabBtn').addEventListener('click', async () => {
+  const msg = document.getElementById('collabMsg');
+  if (!currentBizId){ msg.textContent = 'Create a business first.'; return; }
+  const email = document.getElementById('newCollabEmail').value.trim();
+  if (!email){ msg.textContent = 'An email is required.'; return; }
+  msg.textContent = 'Adding...';
+  const res = await fetch(`/api/my/businesses/${currentBizId}/collaborators`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+    body: JSON.stringify({ email })
+  });
+  const data = await res.json();
+  if (res.ok){
+    msg.textContent = '';
+    document.getElementById('newCollabEmail').value = '';
+    loadCollabList();
+  } else {
+    msg.textContent = data.error || 'Could not add collaborator.';
+  }
+});
+
 document.getElementById('custLogoutBtn').addEventListener('click', () => {
   localStorage.removeItem('ttp_token');
   token = '';
@@ -1404,6 +1484,8 @@ function updateStudioModeUI(biz){
 
 function populateStudioForm(biz){
   currentBizId = biz._id;
+  currentBizIsOwner = (biz.ownerId === myUserId);
+  document.getElementById('studioCollabBtn').style.display = currentBizIsOwner ? 'inline-block' : 'none';
   updateHiringToggleUI(!!biz.hiring);
   document.getElementById('bName').value = biz.name || '';
   document.getElementById('bCategory').value = biz.category || '';
@@ -1438,6 +1520,8 @@ function populateStudioForm(biz){
 
 function clearStudioForm(){
   currentBizId = null;
+  currentBizIsOwner = true;
+  document.getElementById('studioCollabBtn').style.display = 'none';
   updateHiringToggleUI(false);
   ['bName','bCategory','bDescription','bAddress','bArea','bPhone','bEmail','bImageUrl',
    'aboutAccessibility','aboutServiceOptions','aboutPopularFor','aboutOfferings','aboutDiningOptions',
@@ -1772,8 +1856,9 @@ async function loadMyListings(isInitial){
     const thumb = thumbSrc
       ? `<img src="${thumbSrc}" class="bizThumb">`
       : `<div class="bizThumb">🏪</div>`;
+    const isOwner = biz.ownerId === myUserId;
     nameWrap.innerHTML = `${thumb}<div>
-      <div class="bizNameText">${escapeHtml(biz.name)}</div>
+      <div class="bizNameText">${escapeHtml(biz.name)}${isOwner ? '' : ' <span class="staffPermBadge">🤝 Collaborator</span>'}</div>
       <div class="bizMetaText">${escapeHtml(biz.area || '')}</div>
     </div>`;
     nameCell.appendChild(nameWrap);
@@ -1796,17 +1881,24 @@ async function loadMyListings(isInitial){
     dropdown.className = 'rowMenuDropdown';
     dropdown.style.display = 'none';
 
-    const delBtn = document.createElement('button');
-    delBtn.type = 'button';
-    delBtn.className = 'danger';
-    delBtn.textContent = '🗑️ Delete Business';
-    delBtn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      await fetch('/api/my/businesses/' + biz._id, { method: 'DELETE', headers: { 'x-auth-token': token } });
-      if (currentBizId === biz._id) clearStudioForm();
-      loadMyListings();
-    });
-    dropdown.appendChild(delBtn);
+    if (isOwner){
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'danger';
+      delBtn.textContent = '🗑️ Delete Business';
+      delBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await fetch('/api/my/businesses/' + biz._id, { method: 'DELETE', headers: { 'x-auth-token': token } });
+        if (currentBizId === biz._id) clearStudioForm();
+        loadMyListings();
+      });
+      dropdown.appendChild(delBtn);
+    } else {
+      const note = document.createElement('div');
+      note.style.cssText = 'padding:8px 12px;font-size:12px;color:var(--text-muted2);';
+      note.textContent = 'Only the owner can delete this.';
+      dropdown.appendChild(note);
+    }
     menuBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       const isOpen = dropdown.style.display !== 'none';
@@ -1995,6 +2087,8 @@ function renderJobList(biz){
 
 let myPlan = 'free';
 let myEmail = '';
+let myUserId = '';
+let currentBizIsOwner = true;
 
 async function enterApp(){
   const res = await fetch('/api/me', { headers: { 'x-auth-token': token } });
@@ -2002,6 +2096,7 @@ async function enterApp(){
   const data = await res.json();
   myPlan = data.plan;
   myEmail = data.email;
+  myUserId = data.id;
 
   if (data.accountType === 'customer'){
     document.getElementById('custEmail').textContent = data.email;

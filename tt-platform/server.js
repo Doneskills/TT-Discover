@@ -184,6 +184,16 @@ function requireBusinessAccount(req, res, next){
   next();
 }
 
+// True if this user can fully manage a business — the original owner, or a
+// co-owner/collaborator they've added. Collaborators get full day-to-day
+// access (edit info, posts, jobs, deals, staff); only the original owner can
+// delete the listing or manage the collaborator list itself.
+function canManageBiz(biz, userId){
+  if (!biz || !userId) return false;
+  if (biz.ownerId === userId) return true;
+  return (biz.collaborators || []).some(c => c.userId === userId);
+}
+
 // Allows either the business owner (x-auth-token) OR a staff member with the
 // matching permission (x-staff-token) to proceed. Attaches req.biz either way,
 // so handlers don't need to re-fetch or re-check ownership themselves.
@@ -201,7 +211,7 @@ function requireBizPermission(permission){
     const ownerToken = req.headers['x-auth-token'];
     if (ownerToken && usersCol){
       const user = await usersCol.findOne({ sessionToken: ownerToken });
-      if (user && biz.ownerId === user._id.toString()){
+      if (user && canManageBiz(biz, user._id.toString())){
         req.biz = biz;
         req.actor = { type: 'owner' };
         return next();
@@ -588,16 +598,30 @@ function publicBiz(biz){
 app.get('/api/my/businesses', requireUser, async (req, res) => {
   if (!businessesCol) return res.json([]);
   try {
-    const list = await businessesCol.find({ ownerId: req.user._id.toString() }).sort({ name: 1 }).toArray();
-    res.json(list.map(publicBiz));
+    const uid = req.user._id.toString();
+    const list = await businessesCol.find({
+      $or: [{ ownerId: uid }, { 'collaborators.userId': uid }]
+    }).sort({ name: 1 }).toArray();
+    res.json(list.map(biz => ({ ...publicBiz(biz), isOwner: biz.ownerId === uid })));
   } catch (err) {
     res.json([]);
   }
 });
 
+const BUSINESS_LIMIT = { free: 1, premium: 3 };
+
 app.post('/api/my/businesses', requireUser, requireBusinessAccount, async (req, res) => {
   if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
   try {
+    const ownedCount = await businessesCol.countDocuments({ ownerId: req.user._id.toString() });
+    const limit = BUSINESS_LIMIT[req.user.plan === 'premium' ? 'premium' : 'free'];
+    if (ownedCount >= limit){
+      return res.status(403).json({
+        error: req.user.plan === 'premium'
+          ? `Premium accounts can own up to ${limit} businesses.`
+          : `Free accounts can own ${limit} business. Upgrade to Premium to own up to ${BUSINESS_LIMIT.premium}.`
+      });
+    }
     const b = req.body || {};
     const doc = {
       ownerId: req.user._id.toString(),
@@ -619,6 +643,7 @@ app.post('/api/my/businesses', requireUser, requireBusinessAccount, async (req, 
       deals: [],
       posts: [],
       jobs: [],
+      collaborators: [],
       createdAt: new Date()
     };
     if (!doc.name.trim()) return res.status(400).json({ error: 'Business name is required.' });
@@ -659,8 +684,8 @@ app.put('/api/my/businesses/:id', requireUser, requireBusinessAccount, async (re
   if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
   try {
     const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
-    if (!biz || biz.ownerId !== req.user._id.toString()){
-      return res.status(403).json({ error: 'You can only edit your own listing.' });
+    if (!canManageBiz(biz, req.user._id.toString())){
+      return res.status(403).json({ error: 'You can only edit a business you own or collaborate on.' });
     }
     const b = req.body || {};
     const update = {};
@@ -705,8 +730,8 @@ app.patch('/api/my/businesses/:id/hiring', requireUser, requireBusinessAccount, 
   if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
   try {
     const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
-    if (!biz || biz.ownerId !== req.user._id.toString()){
-      return res.status(403).json({ error: 'You can only edit your own listing.' });
+    if (!canManageBiz(biz, req.user._id.toString())){
+      return res.status(403).json({ error: 'You can only edit a business you own or collaborate on.' });
     }
     const hiring = !!(req.body && req.body.hiring);
     await businessesCol.updateOne({ _id: biz._id }, { $set: { hiring } });
@@ -750,8 +775,8 @@ app.post('/api/my/businesses/:id/jobs', requireUser, requireBusinessAccount, asy
   if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
   try {
     const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
-    if (!biz || biz.ownerId !== req.user._id.toString()){
-      return res.status(403).json({ error: 'You can only post jobs for your own listing.' });
+    if (!canManageBiz(biz, req.user._id.toString())){
+      return res.status(403).json({ error: 'You can only post jobs for a business you own or collaborate on.' });
     }
     const b = req.body || {};
     const title = String(b.title || '').trim().slice(0, 100);
@@ -778,8 +803,8 @@ app.delete('/api/my/businesses/:id/jobs/:jobId', requireUser, requireBusinessAcc
   if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
   try {
     const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
-    if (!biz || biz.ownerId !== req.user._id.toString()){
-      return res.status(403).json({ error: 'You can only edit your own listing.' });
+    if (!canManageBiz(biz, req.user._id.toString())){
+      return res.status(403).json({ error: 'You can only edit a business you own or collaborate on.' });
     }
     await businessesCol.updateOne({ _id: biz._id }, { $pull: { jobs: { _id: new ObjectId(req.params.jobId) } } });
     res.json({ ok: true });
@@ -821,8 +846,8 @@ app.post('/api/my/businesses/:id/reviews/:reviewId/reply', requireUser, requireB
   if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
   try {
     const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
-    if (!biz || biz.ownerId !== req.user._id.toString()){
-      return res.status(403).json({ error: 'You can only reply to reviews on your own listing.' });
+    if (!canManageBiz(biz, req.user._id.toString())){
+      return res.status(403).json({ error: 'You can only reply to reviews on a business you own or collaborate on.' });
     }
     const text = String((req.body || {}).text || '').trim().slice(0, 600);
     if (!text) return res.status(400).json({ error: 'A reply message is required.' });
@@ -881,8 +906,8 @@ app.post('/api/my/businesses/:id/staff', requireUser, requireBusinessAccount, as
   if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
   try {
     const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
-    if (!biz || biz.ownerId !== req.user._id.toString()){
-      return res.status(403).json({ error: 'You can only manage staff on your own listing.' });
+    if (!canManageBiz(biz, req.user._id.toString())){
+      return res.status(403).json({ error: 'You can only manage staff on a business you own or collaborate on.' });
     }
     const b = req.body || {};
     const email = String(b.email || '').trim().toLowerCase().slice(0, 150);
@@ -912,13 +937,55 @@ app.delete('/api/my/businesses/:id/staff/:staffId', requireUser, requireBusiness
   if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
   try {
     const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
-    if (!biz || biz.ownerId !== req.user._id.toString()){
-      return res.status(403).json({ error: 'You can only manage staff on your own listing.' });
+    if (!canManageBiz(biz, req.user._id.toString())){
+      return res.status(403).json({ error: 'You can only manage staff on a business you own or collaborate on.' });
     }
     await businessesCol.updateOne({ _id: biz._id }, { $pull: { staff: { _id: new ObjectId(req.params.staffId) } } });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Could not remove staff member.' });
+  }
+});
+
+// ---------------- Collaborators (co-owners) — original owner only ----------------
+// A collaborator gets the same day-to-day access as the owner (edit info,
+// posts, jobs, deals, staff, review replies) but can't delete the business
+// or manage the collaborator list themselves — only the original owner can.
+app.post('/api/my/businesses/:id/collaborators', requireUser, requireBusinessAccount, async (req, res) => {
+  if (!businessesCol || !usersCol) return res.status(503).json({ error: 'Database not connected' });
+  try {
+    const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
+    if (!biz || biz.ownerId !== req.user._id.toString()){
+      return res.status(403).json({ error: 'Only the original owner can manage collaborators.' });
+    }
+    const email = String((req.body || {}).email || '').trim().toLowerCase();
+    if (!email || !email.includes('@')) return res.status(400).json({ error: 'A valid email is required.' });
+    const found = await usersCol.findOne({ email, accountType: 'business' });
+    if (!found) return res.status(404).json({ error: 'No business account found with that email.' });
+    const foundId = found._id.toString();
+    if (foundId === biz.ownerId) return res.status(400).json({ error: "That's already the owner." });
+    if ((biz.collaborators || []).some(c => c.userId === foundId)){
+      return res.status(400).json({ error: 'That person is already a collaborator.' });
+    }
+    const collaborator = { userId: foundId, email: found.email, addedAt: new Date() };
+    await businessesCol.updateOne({ _id: biz._id }, { $push: { collaborators: collaborator } });
+    res.json({ ok: true, collaborator });
+  } catch (err) {
+    res.status(500).json({ error: 'Could not add collaborator.' });
+  }
+});
+
+app.delete('/api/my/businesses/:id/collaborators/:userId', requireUser, requireBusinessAccount, async (req, res) => {
+  if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
+  try {
+    const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
+    if (!biz || biz.ownerId !== req.user._id.toString()){
+      return res.status(403).json({ error: 'Only the original owner can manage collaborators.' });
+    }
+    await businessesCol.updateOne({ _id: biz._id }, { $pull: { collaborators: { userId: req.params.userId } } });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Could not remove collaborator.' });
   }
 });
 
