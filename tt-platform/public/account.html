@@ -368,16 +368,20 @@
         <span class="studioTopIcon" title="Help">❓</span>
         <span class="studioTopIcon" title="Notifications">🔔</span>
       </div>
+      <select id="toolBizSelect" style="display:none;width:auto;padding:8px 10px;font-size:13px;margin:0;"></select>
       <button id="studioNewBtn" class="secondary" style="width:auto;padding:8px 14px;font-size:13px;margin:0;">+ New Business</button>
       <button id="studioListingsBtn" class="secondary" style="width:auto;padding:8px 14px;font-size:13px;margin:0;">📋 Your Businesses</button>
       <button id="studioAnalyticsBtn" class="secondary" style="width:auto;padding:8px 14px;font-size:13px;margin:0;">📊 Analytics</button>
       <button id="studioDealsBtn" class="secondary" style="width:auto;padding:8px 14px;font-size:13px;margin:0;">🔥 Deals</button>
       <button id="studioStaffBtn" class="secondary" style="width:auto;padding:8px 14px;font-size:13px;margin:0;">👥 Staff</button>
       <button id="studioCollabBtn" class="secondary" style="width:auto;padding:8px 14px;font-size:13px;margin:0;">🤝 Collaborators</button>
-      <div class="studioAvatar" id="studioTopAvatar"></div>
+      <div class="studioAvatar" id="studioTopAvatar" title="Settings" style="cursor:pointer;"></div>
     </div>
 
     <div id="studioBody">
+      <div class="card" style="margin-bottom:16px;background:var(--soft-bg);">
+        <p style="font-size:13px;margin:0;">Want to edit an existing business's info, hours, or photos? That now lives in <a href="/settings.html" style="color:#e0562f;font-weight:700;">Settings</a>, next to your profile. This page is just for creating a brand-new business.</p>
+      </div>
       <div id="studioSidebar">
         <div class="studioProfile">
           <div class="studioAvatarBig" id="studioAvatarBig"></div>
@@ -610,6 +614,31 @@
 <script>
 let token = localStorage.getItem('ttp_token') || '';
 let currentBizId = null;
+let activeToolBizId = null;
+let openToolPanel = null;
+
+function populateToolBizSelect(list){
+  const sel = document.getElementById('toolBizSelect');
+  if (!activeToolBizId || !list.some(b => b._id === activeToolBizId)){
+    activeToolBizId = list.length ? list[0]._id : null;
+  }
+  if (list.length > 1){
+    sel.innerHTML = list.map(b => `<option value="${b._id}"${b._id === activeToolBizId ? ' selected' : ''}>${escapeHtml(b.name)}</option>`).join('');
+    sel.style.display = 'inline-block';
+  } else {
+    sel.style.display = 'none';
+  }
+}
+document.getElementById('toolBizSelect').addEventListener('change', (e) => {
+  activeToolBizId = e.target.value;
+  if (openToolPanel === 'analytics') loadAnalytics();
+  else if (openToolPanel === 'deals') loadDeals();
+  else if (openToolPanel === 'staff') loadStaffList();
+  else if (openToolPanel === 'collab') loadCollabList();
+});
+document.getElementById('studioTopAvatar').addEventListener('click', () => {
+  window.location.href = '/settings.html';
+});
 
 // ---------------- Dark / light mode ----------------
 function updateThemeIcon(){
@@ -948,33 +977,38 @@ document.getElementById('studioListingsClose').addEventListener('click', () => {
 document.getElementById('studioAnalyticsBtn').addEventListener('click', () => {
   document.getElementById('studioBody').style.display = 'none';
   document.getElementById('studioAnalyticsPanel').style.display = 'block';
+  openToolPanel = 'analytics';
   loadAnalytics();
 });
 document.getElementById('studioAnalyticsClose').addEventListener('click', () => {
   document.getElementById('studioAnalyticsPanel').style.display = 'none';
   document.getElementById('studioBody').style.display = 'flex';
+  openToolPanel = null;
 });
 
 document.getElementById('studioDealsBtn').addEventListener('click', () => {
   document.getElementById('studioBody').style.display = 'none';
   document.getElementById('studioDealsPanel').style.display = 'block';
+  openToolPanel = 'deals';
   loadDeals();
 });
 document.getElementById('studioDealsClose').addEventListener('click', () => {
   document.getElementById('studioDealsPanel').style.display = 'none';
   document.getElementById('studioBody').style.display = 'flex';
+  openToolPanel = null;
 });
 
 async function loadDeals(){
   const box = document.getElementById('dealsList');
   box.innerHTML = '<p style="color:#999;font-size:13px;">Loading...</p>';
-  if (!currentBizId){
+  const res = await fetch('/api/my/businesses', { headers: { 'x-auth-token': token } });
+  const list = await res.json();
+  if (!list.length){
     box.innerHTML = '<p style="color:#999;font-size:13px;">Create a business first to post deals.</p>';
     return;
   }
-  const res = await fetch('/api/my/businesses', { headers: { 'x-auth-token': token } });
-  const list = await res.json();
-  const biz = list.find(b => b._id === currentBizId);
+  populateToolBizSelect(list);
+  const biz = list.find(b => b._id === activeToolBizId);
   const deals = (biz && biz.deals) || [];
   box.innerHTML = deals.length ? '' : '<p style="color:#999;font-size:13px;">No deals posted yet.</p>';
   deals.forEach(deal => {
@@ -991,7 +1025,7 @@ async function loadDeals(){
     delBtn.className = 'dealDelBtn';
     delBtn.textContent = 'Delete';
     delBtn.addEventListener('click', async () => {
-      await fetch(`/api/my/businesses/${currentBizId}/deals/${deal._id}`, { method: 'DELETE', headers: { 'x-auth-token': token } });
+      await fetch(`/api/my/businesses/${activeToolBizId}/deals/${deal._id}`, { method: 'DELETE', headers: { 'x-auth-token': token } });
       loadDeals();
     });
     row.appendChild(delBtn);
@@ -1001,11 +1035,11 @@ async function loadDeals(){
 
 document.getElementById('postDealBtn').addEventListener('click', async () => {
   const msg = document.getElementById('dealMsg');
-  if (!currentBizId){ msg.textContent = 'Create a business first.'; return; }
+  if (!activeToolBizId){ msg.textContent = 'Create a business first.'; return; }
   const title = document.getElementById('newDealTitle').value.trim();
   if (!title){ msg.textContent = 'A deal title is required.'; return; }
   msg.textContent = 'Posting...';
-  const res = await fetch(`/api/my/businesses/${currentBizId}/deals`, {
+  const res = await fetch(`/api/my/businesses/${activeToolBizId}/deals`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
     body: JSON.stringify({
@@ -1039,7 +1073,8 @@ async function loadAnalytics(){
     box.innerHTML = '<p style="color:#999;font-size:13px;">Create a business first to see its analytics.</p>';
     return;
   }
-  const biz = list.find(b => b._id === currentBizId) || list[0];
+  populateToolBizSelect(list);
+  const biz = list.find(b => b._id === activeToolBizId) || list[0];
 
   // Build the last 30 days (oldest → newest), filling in zero for days with no views.
   const days = [];
@@ -1291,23 +1326,26 @@ document.getElementById('staffDealBtn').addEventListener('click', async () => {
 document.getElementById('studioStaffBtn').addEventListener('click', () => {
   document.getElementById('studioBody').style.display = 'none';
   document.getElementById('studioStaffPanel').style.display = 'block';
+  openToolPanel = 'staff';
   loadStaffList();
 });
 document.getElementById('studioStaffClose').addEventListener('click', () => {
   document.getElementById('studioStaffPanel').style.display = 'none';
   document.getElementById('studioBody').style.display = 'flex';
+  openToolPanel = null;
 });
 
 async function loadStaffList(){
   const box = document.getElementById('staffList');
   box.innerHTML = '<p style="color:#999;font-size:13px;">Loading...</p>';
-  if (!currentBizId){
+  const res = await fetch('/api/my/businesses', { headers: { 'x-auth-token': token } });
+  const list = await res.json();
+  if (!list.length){
     box.innerHTML = '<p style="color:#999;font-size:13px;">Create a business first to add staff.</p>';
     return;
   }
-  const res = await fetch('/api/my/businesses', { headers: { 'x-auth-token': token } });
-  const list = await res.json();
-  const biz = list.find(b => b._id === currentBizId);
+  populateToolBizSelect(list);
+  const biz = list.find(b => b._id === activeToolBizId);
   const staffMembers = (biz && biz.staff) || [];
   box.innerHTML = staffMembers.length ? '' : '<p style="color:#999;font-size:13px;">No staff added yet.</p>';
   staffMembers.forEach(s => {
@@ -1325,7 +1363,7 @@ async function loadStaffList(){
     delBtn.className = 'staffDelBtn';
     delBtn.textContent = 'Remove';
     delBtn.addEventListener('click', async () => {
-      await fetch(`/api/my/businesses/${currentBizId}/staff/${s._id}`, { method: 'DELETE', headers: { 'x-auth-token': token } });
+      await fetch(`/api/my/businesses/${activeToolBizId}/staff/${s._id}`, { method: 'DELETE', headers: { 'x-auth-token': token } });
       loadStaffList();
     });
     row.appendChild(delBtn);
@@ -1335,13 +1373,13 @@ async function loadStaffList(){
 
 document.getElementById('addStaffBtn').addEventListener('click', async () => {
   const msg = document.getElementById('staffMsg');
-  if (!currentBizId){ msg.textContent = 'Create a business first.'; return; }
+  if (!activeToolBizId){ msg.textContent = 'Create a business first.'; return; }
   const email = document.getElementById('newStaffEmail').value.trim();
   const password = document.getElementById('newStaffPassword').value;
   if (!email){ msg.textContent = 'An email is required.'; return; }
   if (password.length < 6){ msg.textContent = 'Password must be at least 6 characters.'; return; }
   msg.textContent = 'Adding...';
-  const res = await fetch(`/api/my/businesses/${currentBizId}/staff`, {
+  const res = await fetch(`/api/my/businesses/${activeToolBizId}/staff`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
     body: JSON.stringify({
@@ -1368,23 +1406,26 @@ document.getElementById('addStaffBtn').addEventListener('click', async () => {
 document.getElementById('studioCollabBtn').addEventListener('click', () => {
   document.getElementById('studioBody').style.display = 'none';
   document.getElementById('studioCollabPanel').style.display = 'block';
+  openToolPanel = 'collab';
   loadCollabList();
 });
 document.getElementById('studioCollabClose').addEventListener('click', () => {
   document.getElementById('studioCollabPanel').style.display = 'none';
   document.getElementById('studioBody').style.display = 'flex';
+  openToolPanel = null;
 });
 
 async function loadCollabList(){
   const box = document.getElementById('collabList');
   box.innerHTML = '<p style="color:#999;font-size:13px;">Loading...</p>';
-  if (!currentBizId){
+  const res = await fetch('/api/my/businesses', { headers: { 'x-auth-token': token } });
+  const list = await res.json();
+  if (!list.length){
     box.innerHTML = '<p style="color:#999;font-size:13px;">Create a business first to add collaborators.</p>';
     return;
   }
-  const res = await fetch('/api/my/businesses', { headers: { 'x-auth-token': token } });
-  const list = await res.json();
-  const biz = list.find(b => b._id === currentBizId);
+  populateToolBizSelect(list);
+  const biz = list.find(b => b._id === activeToolBizId);
   const collabs = (biz && biz.collaborators) || [];
   box.innerHTML = collabs.length ? '' : '<p style="color:#999;font-size:13px;">No collaborators yet.</p>';
   collabs.forEach(c => {
@@ -1399,7 +1440,7 @@ async function loadCollabList(){
     delBtn.className = 'staffDelBtn';
     delBtn.textContent = 'Remove';
     delBtn.addEventListener('click', async () => {
-      await fetch(`/api/my/businesses/${currentBizId}/collaborators/${c.userId}`, { method: 'DELETE', headers: { 'x-auth-token': token } });
+      await fetch(`/api/my/businesses/${activeToolBizId}/collaborators/${c.userId}`, { method: 'DELETE', headers: { 'x-auth-token': token } });
       loadCollabList();
     });
     row.appendChild(delBtn);
@@ -1409,11 +1450,11 @@ async function loadCollabList(){
 
 document.getElementById('addCollabBtn').addEventListener('click', async () => {
   const msg = document.getElementById('collabMsg');
-  if (!currentBizId){ msg.textContent = 'Create a business first.'; return; }
+  if (!activeToolBizId){ msg.textContent = 'Create a business first.'; return; }
   const email = document.getElementById('newCollabEmail').value.trim();
   if (!email){ msg.textContent = 'An email is required.'; return; }
   msg.textContent = 'Adding...';
-  const res = await fetch(`/api/my/businesses/${currentBizId}/collaborators`, {
+  const res = await fetch(`/api/my/businesses/${activeToolBizId}/collaborators`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
     body: JSON.stringify({ email })
@@ -1485,7 +1526,6 @@ function updateStudioModeUI(biz){
 function populateStudioForm(biz){
   currentBizId = biz._id;
   currentBizIsOwner = (biz.ownerId === myUserId);
-  document.getElementById('studioCollabBtn').style.display = currentBizIsOwner ? 'inline-block' : 'none';
   updateHiringToggleUI(!!biz.hiring);
   document.getElementById('bName').value = biz.name || '';
   document.getElementById('bCategory').value = biz.category || '';
@@ -1521,7 +1561,6 @@ function populateStudioForm(biz){
 function clearStudioForm(){
   currentBizId = null;
   currentBizIsOwner = true;
-  document.getElementById('studioCollabBtn').style.display = 'none';
   updateHiringToggleUI(false);
   ['bName','bCategory','bDescription','bAddress','bArea','bPhone','bEmail','bImageUrl',
    'aboutAccessibility','aboutServiceOptions','aboutPopularFor','aboutOfferings','aboutDiningOptions',
@@ -1811,9 +1850,6 @@ async function loadMyListings(isInitial){
   if (!res.ok) return;
   const list = await res.json();
   const box = document.getElementById('myListings');
-  if (isInitial && list.length && !currentBizId){
-    populateStudioForm(list[0]);
-  }
   if (!list.length){
     box.innerHTML = '<p style="color:#999;font-size:13px;">You haven\'t created any businesses yet.</p>';
     return;
@@ -1842,11 +1878,9 @@ async function loadMyListings(isInitial){
   list.forEach(biz => {
     const row = document.createElement('tr');
     row.setAttribute('data-bizrow', '1');
-    row.title = 'Open this business in the editor';
+    row.title = 'Edit this business in Settings';
     row.addEventListener('click', () => {
-      populateStudioForm(biz);
-      document.getElementById('studioListingsPanel').style.display = 'none';
-      document.getElementById('studioBody').style.display = 'flex';
+      window.location.href = '/settings.html?biz=' + biz._id;
     });
 
     const nameCell = document.createElement('td');

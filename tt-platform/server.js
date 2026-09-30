@@ -449,7 +449,9 @@ app.get('/api/me', requireUser, async (req, res) => {
     preferredArea: user.preferredArea || null,
     plan: user.plan || 'free',
     premiumMethod: user.premiumMethod || null,
-    premiumExpiresAt: user.premiumExpiresAt || null
+    premiumExpiresAt: user.premiumExpiresAt || null,
+    username: user.username || '',
+    avatarUrl: user.avatarUrl || ''
   });
 });
 
@@ -461,6 +463,23 @@ app.post('/api/me/preferences', requireUser, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Could not save preferences.' });
+  }
+});
+
+// Profile fields shared by both business and customer accounts.
+app.post('/api/me/profile', requireUser, async (req, res) => {
+  if (!usersCol) return res.status(503).json({ error: 'Database not connected' });
+  try {
+    const b = req.body || {};
+    const username = String(b.username || '').trim().slice(0, 30);
+    const avatarUrl = String(b.avatarUrl || '');
+    if (avatarUrl.length > 2 * 1024 * 1024){
+      return res.status(400).json({ error: 'That image is too large — please choose a smaller one.' });
+    }
+    await usersCol.updateOne({ _id: req.user._id }, { $set: { username, avatarUrl } });
+    res.json({ ok: true, username, avatarUrl });
+  } catch (err) {
+    res.status(500).json({ error: 'Could not save profile.' });
   }
 });
 
