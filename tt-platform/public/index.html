@@ -48,6 +48,25 @@
   }
   .navBtn.avatarBtn.signedIn { background: #a8341f; border-color: #fff; font-weight: 700; font-size: 16px; }
   .navBtn.avatarBtn { overflow: hidden; }
+  .acctMenu {
+    position: absolute; top: 48px; right: 0; width: 240px; background: #232323; color: #f2f2f2;
+    border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); display: none; text-align: left; z-index: 40;
+    overflow: hidden;
+  }
+  .acctMenu.open { display: block; }
+  .acctMenuHead { display: flex; gap: 10px; align-items: center; padding: 14px; border-bottom: 1px solid #3a3a3a; }
+  .acctMenuAvatar {
+    width: 38px; height: 38px; border-radius: 50%; background: #a8341f; color: #fff; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0;
+  }
+  .acctMenuAvatar img { width: 100%; height: 100%; object-fit: cover; }
+  .acctMenuName { font-size: 14px; font-weight: 700; line-height: 1.2; }
+  .acctMenuSub { font-size: 12px; color: #aaa; }
+  .acctMenuItem {
+    display: block; width: 100%; background: none; border: none; color: #f2f2f2; text-align: left;
+    padding: 12px 16px; font-size: 14px; cursor: pointer; font-family: inherit;
+  }
+  .acctMenuItem:hover, .acctMenuItem:focus-visible { background: #343434; outline: none; }
   #aboutModal {
     position: fixed; inset: 0; background: rgba(0,0,0,0.5);
     display: none; align-items: center; justify-content: center; z-index: 60; padding: 16px;
@@ -176,7 +195,22 @@
   <div class="navBtns">
     <div class="navBtn" id="themeToggleBtn" title="Toggle dark mode">🌙</div>
     <div class="navBtn pill" id="addBtn">+ Create</div>
-    <div class="navBtn avatarBtn" id="accountBtn"><span id="avatarLetter">👤</span></div>
+    <div style="position:relative;">
+      <div class="navBtn avatarBtn" id="accountBtn"><span id="avatarLetter">👤</span></div>
+      <div class="acctMenu" id="acctMenu" role="menu">
+        <div class="acctMenuHead">
+          <div class="acctMenuAvatar" id="acctMenuAvatar"></div>
+          <div>
+            <div class="acctMenuName" id="acctMenuName"></div>
+            <div class="acctMenuSub" id="acctMenuSub"></div>
+          </div>
+        </div>
+        <button class="acctMenuItem" id="menuProfile" role="menuitem">Profile</button>
+        <button class="acctMenuItem" id="menuSettings" role="menuitem">Settings</button>
+        <button class="acctMenuItem" id="menuAbout" role="menuitem">About Us</button>
+        <button class="acctMenuItem" id="menuLogout" role="menuitem">Log Out</button>
+      </div>
+    </div>
   </div>
   <h1><img src="/icon.svg" alt="" style="height:1em;vertical-align:-0.15em;margin-right:8px;">TT Discover</h1>
   <p>Discover what's good, right here in Trinidad &amp; Tobago</p>
@@ -260,6 +294,7 @@ async function checkSignInStatus(){
     if (!res.ok) throw new Error('invalid session');
     const data = await res.json();
     currentUserId = data.id;
+    window.__me = data;
     if (data.avatarUrl){
       avatar.innerHTML = `<img src="${data.avatarUrl}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
     } else {
@@ -276,9 +311,33 @@ async function checkSignInStatus(){
   }
 }
 
-document.getElementById('accountBtn').addEventListener('click', async () => {
+const acctMenu = document.getElementById('acctMenu');
+function fillAcctMenu(){
+  const me = window.__me || {};
+  const av = document.getElementById('acctMenuAvatar');
+  av.innerHTML = me.avatarUrl ? `<img src="${me.avatarUrl}" alt="">` : ((me.username || me.email || '?')[0].toUpperCase());
+  document.getElementById('acctMenuName').textContent = me.username || (me.email || '').split('@')[0];
+  document.getElementById('acctMenuSub').textContent = me.realName || me.email || '';
+}
+document.getElementById('accountBtn').addEventListener('click', async (e) => {
+  e.stopPropagation();
+  if (acctMenu.classList.contains('open')){ acctMenu.classList.remove('open'); return; }
   const status = await checkSignInStatus();
-  window.location.href = status.signedIn ? '/settings.html' : '/account.html';
+  if (!status.signedIn){ window.location.href = '/account.html'; return; }
+  fillAcctMenu();
+  acctMenu.classList.add('open');
+});
+document.addEventListener('click', (e) => { if (!acctMenu.contains(e.target)) acctMenu.classList.remove('open'); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') acctMenu.classList.remove('open'); });
+document.getElementById('menuProfile').addEventListener('click', () => { window.location.href = '/profile.html'; });
+document.getElementById('menuSettings').addEventListener('click', () => { window.location.href = '/settings.html'; });
+document.getElementById('menuAbout').addEventListener('click', () => {
+  acctMenu.classList.remove('open');
+  document.getElementById('aboutModal').classList.add('open');
+});
+document.getElementById('menuLogout').addEventListener('click', () => {
+  localStorage.removeItem('ttp_token');
+  window.location.reload();
 });
 document.getElementById('footerAboutLink').addEventListener('click', (e) => {
   e.preventDefault();

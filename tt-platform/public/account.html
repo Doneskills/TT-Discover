@@ -2144,9 +2144,18 @@ async function enterApp(){
   document.getElementById('studioAvatarBig').textContent = initial;
   document.getElementById('studioTopAvatar').textContent = initial;
   showView('main');
-  loadMyListings(true);
+  await loadMyListings(true);
 
   const params = new URLSearchParams(window.location.search);
+  const toolParam = params.get('tool');
+  if (toolParam){
+    const bizParam = params.get('biz');
+    const sel = document.getElementById('toolBizSelect');
+    if (bizParam && Array.from(sel.options).some(o => o.value === bizParam)) sel.value = bizParam;
+    if (bizParam) activeToolBizId = bizParam;
+    const btnId = { analytics: 'studioAnalyticsBtn', deals: 'studioDealsBtn', staff: 'studioStaffBtn', collab: 'studioCollabBtn' }[toolParam];
+    if (btnId) document.getElementById(btnId).click();
+  }
   if (params.get('premium') === 'success'){
     document.getElementById('premiumMsg').textContent = 'Payment received — Premium is active!';
     document.getElementById('premiumPopup').classList.add('open');

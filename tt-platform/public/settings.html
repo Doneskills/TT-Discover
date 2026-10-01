@@ -7,339 +7,372 @@
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
 <script>
   (function(){
-    var saved = localStorage.getItem('tt_theme');
-    if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    if (localStorage.getItem('tt_theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
   })();
 </script>
 <style>
   :root {
-    --bg: #fdf6ec; --text: #2a2a2a; --text-muted: #999; --text-muted3: #777;
-    --card-bg: #ffffff; --border: #eee; --input-bg: #fdf6ec; --input-border: #e8dcc8;
-    --soft-bg: #f0e4d0; --soft-bg-hover: #e8dcc8;
+    --bg: #fdf6ec; --text: #2a2a2a; --muted: #777; --card: #ffffff; --border: #e3d6c0;
+    --input-bg: #ffffff; --input-border: #e8dcc8; --dark: #232323; --active: #f0e4d0;
   }
   [data-theme="dark"] {
-    --bg: #16181d; --text: #e8e6e3; --text-muted: #999; --text-muted3: #a9a9a9;
-    --card-bg: #22252b; --border: #33363d; --input-bg: #2a2d34; --input-border: #3a3d45;
-    --soft-bg: #33363d; --soft-bg-hover: #3a3d45;
+    --bg: #16181d; --text: #e8e6e3; --muted: #a9a9a9; --card: #22252b; --border: #33363d;
+    --input-bg: #2a2d34; --input-border: #3a3d45; --dark: #3a3d45; --active: #33363d;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
   header {
-    background: linear-gradient(135deg, #e0562f, #f2a33c); color: #fff;
-    padding: 18px 20px; display: flex; justify-content: space-between; align-items: center;
+    background: linear-gradient(135deg, #e0562f, #f2a33c); color: #fff; padding: 16px 20px;
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
   }
-  header a { color: #fff; text-decoration: none; font-size: 14px; opacity: 0.9; }
-  header h1 { font-size: 18px; }
-  header button { margin: 0; width: auto; padding: 8px 14px; font-size: 13px; background: rgba(0,0,0,0.15); }
-  .wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px 60px; }
-  .card {
-    background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 18px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-  }
-  h2 { font-size: 17px; margin-bottom: 12px; }
-  label { display: block; font-size: 12px; text-transform: uppercase; color: var(--text-muted); margin: 12px 0 5px; }
-  input, textarea, select {
-    width: 100%; padding: 9px 10px; background: var(--input-bg); border: 1px solid var(--input-border);
-    border-radius: 6px; color: var(--text); font-size: 14px;
-  }
-  textarea { resize: vertical; min-height: 60px; }
-  button {
-    margin-top: 14px; width: 100%; padding: 10px; background: #e0562f; color: #fff;
-    border: none; border-radius: 6px; font-weight: 700; cursor: pointer;
-  }
-  button.secondary { background: var(--soft-bg); color: var(--text); }
-  .msg { margin-top: 10px; font-size: 13px; color: #e0562f; min-height: 16px; }
-  hr { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
-  #loadingView { text-align: center; padding: 60px 20px; color: var(--text-muted); font-size: 14px; }
+  header a { color: #fff; text-decoration: none; font-size: 15px; }
+  header a:hover { text-decoration: underline; }
+  header h1 { font-size: 22px; }
+  header .right { justify-self: end; }
+  button { font-family: inherit; font-size: 14px; border: none; border-radius: 8px; padding: 10px 16px; background: var(--dark); color: #fff; cursor: pointer; font-weight: 600; }
+  button:hover { filter: brightness(1.15); }
+  button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, .navItem:focus-visible { outline: 2px solid #e0562f; outline-offset: 2px; }
+  button.primary { background: #e0562f; }
+  button.ghost { background: none; color: var(--text); border: 1px solid var(--border); }
 
-  .profileRow { display: flex; gap: 16px; align-items: center; }
-  .settingsAvatar {
-    width: 72px; height: 72px; border-radius: 50%; background: #e0562f; color: #fff;
-    display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700;
-    overflow: hidden; flex-shrink: 0; cursor: pointer;
-  }
-  .settingsAvatar img { width: 100%; height: 100%; object-fit: cover; }
-  .emailNote { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+  #loading, #notBusiness, #noBiz { max-width: 520px; margin: 80px auto; text-align: center; padding: 0 20px; color: var(--muted); line-height: 1.6; }
+  #notBusiness h2, #noBiz h2 { color: var(--text); margin-bottom: 10px; }
+  #notBusiness a, #noBiz a { color: #e0562f; }
 
-  .bizAccordionRow { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
-  .bizAccordionHead {
-    display: flex; justify-content: space-between; align-items: center; padding: 12px 14px;
-    cursor: pointer; font-size: 14px; font-weight: 700; background: var(--soft-bg);
-  }
-  .bizAccordionHead:hover { background: var(--soft-bg-hover); }
-  .bizAccordionHead .meta { font-weight: 400; font-size: 12px; color: var(--text-muted); margin-left: 8px; }
-  .collabTag { display: inline-block; font-size: 11px; background: var(--card-bg); padding: 2px 8px; border-radius: 10px; margin-left: 8px; }
-  .bizAccordionBody { display: none; padding: 16px; }
-  .bizAccordionBody.open { display: block; }
-  .bizAccordionHead .chev { transition: transform 0.15s; }
-  .bizAccordionHead.open .chev { transform: rotate(90deg); }
+  #app { display: none; min-height: calc(100vh - 62px); }
+  #app.show { display: grid; grid-template-columns: 280px 1fr; }
+  aside { border-right: 3px solid var(--text); padding: 26px 0; }
+  .bizHead { text-align: center; padding: 0 18px 18px; border-bottom: 3px solid var(--text); margin: 0 18px; }
+  .bizAvatar { width: 104px; height: 104px; border-radius: 50%; background: var(--dark); color: #fff; font-size: 44px; display: flex; align-items: center; justify-content: center; overflow: hidden; margin: 0 auto 12px; }
+  .bizAvatar img { width: 100%; height: 100%; object-fit: cover; }
+  .bizHead .n { font-weight: 700; font-size: 16px; word-break: break-word; }
+  .bizHead .e { font-size: 13px; color: var(--muted); word-break: break-word; margin-top: 2px; }
+  #bizSwitch { margin-top: 12px; width: 100%; }
+  nav { padding: 14px 0; }
+  .navItem { display: flex; justify-content: space-between; width: 100%; background: none; color: var(--text); text-align: left; border-radius: 0; padding: 12px 34px; font-size: 16px; font-weight: 400; }
+  .navItem.active { background: var(--active); font-weight: 700; box-shadow: inset 4px 0 0 #e0562f; }
+  .navItem .ext { color: var(--muted); font-size: 13px; }
+  .navSep { height: 1px; background: var(--border); margin: 8px 34px; }
 
-  .dropZone {
-    border: 2px dashed var(--input-border); border-radius: 10px; padding: 16px; text-align: center;
-    cursor: pointer; font-size: 13px; color: var(--text-muted); margin-top: 6px;
+  main { padding: 22px 34px 60px; min-width: 0; }
+  .topRow { display: flex; justify-content: flex-end; align-items: center; gap: 14px; margin-bottom: 14px; }
+  .hiringLbl { font-size: 15px; }
+  .seg { display: inline-flex; }
+  .seg button { border-radius: 0; background: var(--dark); opacity: .55; padding: 8px 14px; }
+  .seg button:first-child { border-radius: 8px 0 0 8px; border-right: 2px solid var(--bg); }
+  .seg button:last-child { border-radius: 0 8px 8px 0; }
+  .seg button.on { opacity: 1; background: #e0562f; }
+  .topAvatar { width: 44px; height: 44px; border-radius: 50%; background: var(--dark); color: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden; font-weight: 700; text-decoration: none; }
+  .topAvatar img { width: 100%; height: 100%; object-fit: cover; }
+  h2.sec { font-size: 26px; font-weight: 500; margin: 6px 0 16px; }
+  .subTabs { display: flex; gap: 26px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+  .subTab { background: none; color: var(--muted); padding: 8px 2px; border-radius: 0; font-size: 17px; font-weight: 400; }
+  .subTab.active { color: var(--text); box-shadow: inset 0 -3px 0 #e0562f; font-weight: 600; }
+  .panel { display: none; max-width: 560px; }
+  .panel.show { display: block; }
+  label { display: block; font-size: 14px; margin: 16px 0 6px; }
+  input[type=text], input[type=url], input[type=time], textarea, select {
+    width: 100%; padding: 11px 13px; border-radius: 10px; border: 1px solid var(--input-border);
+    background: var(--input-bg); color: var(--text); font-size: 15px; font-family: inherit;
   }
-  .dropZone img { max-width: 100%; max-height: 140px; border-radius: 8px; }
+  textarea { min-height: 110px; resize: vertical; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .hoursRow { display: grid; grid-template-columns: 52px 1fr 1fr 78px; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .hoursRow input[type=time] { padding: 8px 10px; }
+  .hoursRow label { margin: 0; display: flex; gap: 5px; align-items: center; font-size: 13px; }
+  .photoGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; margin-top: 8px; }
+  .photoGrid .ph { position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: var(--active); }
+  .photoGrid img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .photoGrid .rm { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; padding: 0; border-radius: 50%; background: rgba(0,0,0,.65); font-size: 12px; line-height: 1; }
+  .savebar { margin-top: 28px; display: flex; align-items: center; gap: 14px; }
+  .msg { font-size: 13px; color: #e0562f; }
+  @media (max-width: 760px) {
+    #app.show { grid-template-columns: 1fr; }
+    aside { border-right: none; border-bottom: 3px solid var(--text); padding: 18px 0 0; }
+    nav { display: flex; overflow-x: auto; padding: 8px 10px; }
+    .navItem { width: auto; white-space: nowrap; padding: 10px 14px; gap: 6px; }
+    .navItem.active { box-shadow: inset 0 -3px 0 #e0562f; }
+    .navSep { display: none; }
+    main { padding: 18px 16px 60px; }
+    header { grid-template-columns: auto 1fr auto; gap: 8px; }
+    header h1 { text-align: center; font-size: 19px; }
+  }
 </style>
 </head>
 <body>
-
 <header>
-  <a href="/">← Back to TT Discover</a>
+  <a href="/">← Go Back</a>
   <h1>Settings</h1>
-  <button id="logoutBtn" type="button">Log Out</button>
+  <div class="right"><button id="createNewBtn" type="button" style="display:none;">Create New</button></div>
 </header>
 
-<div class="wrap">
-  <div id="loadingView">Loading...</div>
+<div id="loading">Loading...</div>
 
-  <div id="settingsView" style="display:none;">
-    <div class="card">
-      <h2>Profile and Username</h2>
-      <div class="profileRow">
-        <div id="avatarPreview" class="settingsAvatar" title="Change photo">👤</div>
-        <div style="flex:1;">
-          <input type="file" id="avatarFileInput" accept="image/*" style="display:none;">
-          <button type="button" id="avatarPickBtn" class="secondary" style="margin-top:0;">Change Photo</button>
-        </div>
-      </div>
-      <label>Username</label>
-      <input type="text" id="usernameInput" maxlength="30" placeholder="Pick a username">
-      <div class="emailNote" id="emailDisplay"></div>
-      <button id="saveProfileBtn">Save Profile</button>
-      <div class="msg" id="profileMsg"></div>
+<div id="notBusiness" style="display:none;">
+  <h2>Settings are for business accounts</h2>
+  <p>This settings page is for people who have a business. Your personal details live on your <a href="/profile.html">Profile</a>.</p>
+  <p style="margin-top:10px;"><a href="/">← Back to TT Discover</a></p>
+</div>
+
+<div id="noBiz" style="display:none;">
+  <h2>No business yet</h2>
+  <p>Create your first business and its settings will show up here.</p>
+  <p style="margin-top:14px;"><button class="primary" type="button" onclick="location.href='/account.html'">Create your business</button></p>
+</div>
+
+<div id="app">
+  <aside>
+    <div class="bizHead">
+      <div class="bizAvatar" id="bizAvatar"></div>
+      <div class="n" id="bizName"></div>
+      <div class="e" id="bizEmail"></div>
+      <select id="bizSwitch" style="display:none;" aria-label="Choose business"></select>
+    </div>
+    <nav id="nav"></nav>
+  </aside>
+
+  <main>
+    <div class="topRow">
+      <span class="hiringLbl">Hiring</span>
+      <span class="seg" id="hiringSeg"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span>
+      <a class="topAvatar" id="topAvatar" href="/profile.html" title="Your profile"></a>
     </div>
 
-    <div class="card" id="businessSection" style="display:none;">
-      <h2>Your Business</h2>
-      <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Click a business to edit its info right here.</p>
-      <div id="bizAccordion"></div>
-      <a href="/account.html" style="display:block;text-align:center;font-size:13px;margin-top:6px;color:#e0562f;">Open Studio tools (Analytics, Deals, Staff, Collaborators) →</a>
+    <h2 class="sec" id="secTitle">Your Business</h2>
+    <div class="subTabs" id="subTabs"></div>
+
+    <div class="panel" data-field="name"><label for="f-name">Business name</label><input type="text" id="f-name" maxlength="100"></div>
+    <div class="panel" data-field="category"><label for="f-category">Business category</label><input type="text" id="f-category" maxlength="40" placeholder="e.g. Restaurant, Bakery, Food truck"></div>
+
+    <div class="panel" data-field="description"><label for="f-description">Description</label><textarea id="f-description" maxlength="500"></textarea></div>
+    <div class="panel" data-field="photos">
+      <label>Main photo</label><div class="photoGrid" id="g-main"></div>
+      <button type="button" class="ghost" data-add="main" style="margin-top:8px;">Choose main photo</button>
+      <label>Photos of the business</label><div class="photoGrid" id="g-photos"></div>
+      <button type="button" class="ghost" data-add="photos" style="margin-top:8px;">Add photos</button>
     </div>
-  </div>
+    <div class="panel" data-field="menu">
+      <label>Menu photos</label><div class="photoGrid" id="g-menu"></div>
+      <button type="button" class="ghost" data-add="menu" style="margin-top:8px;">Add menu photos</button>
+      <label>Highlights</label><div class="photoGrid" id="g-highlights"></div>
+      <button type="button" class="ghost" data-add="highlights" style="margin-top:8px;">Add highlight photos</button>
+      <div class="hint">Up to 10 photos in each group.</div>
+    </div>
+
+    <div class="panel" data-field="about" id="aboutFields"></div>
+
+    <div class="panel" data-field="address"><label for="f-address">Address</label><input type="text" id="f-address" maxlength="200"><label for="f-area">Area</label><input type="text" id="f-area" maxlength="60" placeholder="e.g. Port of Spain"></div>
+    <div class="panel" data-field="hours"><label>Date &amp; time open</label><div id="hoursBox"></div><div class="hint" id="hoursNote"></div></div>
+    <div class="panel" data-field="contact"><label for="f-phone">Business phone</label><input type="text" id="f-phone" maxlength="40"><label for="f-email">Business email</label><input type="text" id="f-email" maxlength="150"></div>
+
+    <div class="panel" data-field="facebook"><label for="f-facebook">Facebook</label><input type="url" id="f-facebook" placeholder="https://facebook.com/..."></div>
+    <div class="panel" data-field="instagram"><label for="f-instagram">Instagram</label><input type="url" id="f-instagram" placeholder="https://instagram.com/..."></div>
+    <div class="panel" data-field="website"><label for="f-website">Website</label><input type="url" id="f-website" placeholder="https://..."></div>
+
+    <input type="file" id="photoInput" accept="image/*" multiple style="display:none;">
+    <div class="savebar" id="savebar"><button type="button" class="primary" id="saveBtn">Save Changes</button><span class="msg" id="msg" role="status"></span></div>
+  </main>
 </div>
 
 <script>
 const token = localStorage.getItem('ttp_token') || '';
-if (!token){ window.location.href = '/account.html'; }
+if (!token) location.href = '/account.html';
+const $ = id => document.getElementById(id);
+const esc = s => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
 
-let avatarUrl = '';
-const params = new URLSearchParams(window.location.search);
-const deepLinkBizId = params.get('biz');
+const ABOUT = [['accessibility','Accessibility'],['serviceOptions','Service options'],['popularFor','Popular for'],['offerings','Offerings'],['diningOptions','Dining options'],['atmosphere','Atmosphere'],['crowd','Crowd'],['payments','Payments'],['children','Children'],['parking','Parking']];
+const DAYS = [['mon','Mon'],['tue','Tue'],['wed','Wed'],['thu','Thu'],['fri','Fri'],['sat','Sat'],['sun','Sun']];
 
-function escapeHtml(s){
-  const d = document.createElement('div');
-  d.textContent = s == null ? '' : String(s);
-  return d.innerHTML;
-}
+// Sidebar sections. "tool" entries open the matching Studio panel (owner-only ones are hidden for collaborators).
+const SECTIONS = [
+  { id: 'name', label: 'Business Name', title: 'Your Business', subs: [['name','Business Name'],['category','Business Category']] },
+  { id: 'overview', label: 'Overview', title: 'Overview', subs: [['description','Description'],['photos','Photos'],['menu','Menu & Highlights']] },
+  { id: 'about', label: 'About', title: 'About', subs: [['about','About']] },
+  { id: 'location', label: 'Location', title: 'Location', subs: [['address','Address'],['hours','Hours'],['contact','Phone & Email']] },
+  { id: 'social', label: 'Social Media Links', title: 'Social Media Links', subs: [['facebook','Facebook'],['instagram','Instagram'],['website','Website']] },
+  { sep: true },
+  { tool: 'collab', label: 'Collaborators', ownerOnly: true },
+  { tool: 'staff', label: 'Staff', ownerOnly: true },
+  { tool: 'analytics', label: 'Analytics' },
+  { tool: 'deals', label: 'Deals' }
+];
+
+let me, list = [], biz = null, state = {}, activeSection = 'name', activeSub = 'name', hoursTouched = false, photoTarget = null;
 
 async function init(){
   const res = await fetch('/api/me', { headers: { 'x-auth-token': token } });
-  if (!res.ok){ window.location.href = '/account.html'; return; }
-  const data = await res.json();
+  if (!res.ok){ location.href = '/account.html'; return; }
+  me = await res.json();
+  $('loading').style.display = 'none';
+  const ta = $('topAvatar');
+  ta.innerHTML = me.avatarUrl ? `<img src="${me.avatarUrl}" alt="">` : esc((me.username || me.email)[0].toUpperCase());
 
-  document.getElementById('loadingView').style.display = 'none';
-  document.getElementById('settingsView').style.display = 'block';
-  document.getElementById('emailDisplay').textContent = data.email;
-  document.getElementById('usernameInput').value = data.username || '';
-  avatarUrl = data.avatarUrl || '';
-  renderAvatarPreview(data.username || data.email);
+  if (me.accountType !== 'business'){ $('notBusiness').style.display = 'block'; return; }
+  $('createNewBtn').style.display = 'inline-block';
 
-  if (data.accountType === 'business'){
-    document.getElementById('businessSection').style.display = 'block';
-    loadBusinesses();
-  }
+  const r = await fetch('/api/my/businesses', { headers: { 'x-auth-token': token } });
+  list = r.ok ? await r.json() : [];
+  if (!list.length){ $('noBiz').style.display = 'block'; return; }
+
+  const wanted = new URLSearchParams(location.search).get('biz');
+  const chosen = list.find(b => b._id === wanted) || list[0];
+  $('bizSwitch').innerHTML = list.map(b => `<option value="${b._id}">${esc(b.name)}${b.isOwner ? '' : ' (collaborator)'}</option>`).join('');
+  $('bizSwitch').style.display = list.length > 1 ? 'block' : 'none';
+  $('app').classList.add('show');
+  selectBiz(chosen._id);
 }
 
-function renderAvatarPreview(fallbackLabel){
-  const box = document.getElementById('avatarPreview');
-  box.innerHTML = avatarUrl
-    ? `<img src="${avatarUrl}">`
-    : (fallbackLabel || '?')[0].toUpperCase();
-}
-
-// ---------------- Avatar upload (resize to a small square, like the admin photo picker) ----------------
-document.getElementById('avatarPickBtn').addEventListener('click', () => document.getElementById('avatarFileInput').click());
-document.getElementById('avatarPreview').addEventListener('click', () => document.getElementById('avatarFileInput').click());
-document.getElementById('avatarFileInput').addEventListener('change', (e) => {
-  if (e.target.files[0]) handleAvatarFile(e.target.files[0]);
-});
-function handleAvatarFile(file){
-  if (!file.type.startsWith('image/')){ alert('Please choose an image file.'); return; }
-  const reader = new FileReader();
-  reader.onload = (evt) => {
-    const img = new Image();
-    img.onload = () => {
-      const size = 240;
-      const canvas = document.createElement('canvas');
-      canvas.width = size; canvas.height = size;
-      const ctx = canvas.getContext('2d');
-      const scale = Math.max(size / img.width, size / img.height);
-      const w = img.width * scale, h = img.height * scale;
-      ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
-      avatarUrl = canvas.toDataURL('image/jpeg', 0.8);
-      renderAvatarPreview();
-    };
-    img.src = evt.target.result;
+function selectBiz(id){
+  biz = list.find(b => b._id === id);
+  $('bizSwitch').value = id;
+  state = {
+    imageUrl: biz.imageUrl || '', photos: [...(biz.photos || [])], menu: [...(biz.menuPhotos || [])], highlights: [...(biz.highlights || [])],
+    hiring: !!biz.hiring
   };
-  reader.readAsDataURL(file);
+  hoursTouched = false;
+  $('f-name').value = biz.name || ''; $('f-category').value = biz.category || '';
+  $('f-description').value = biz.description || '';
+  $('f-address').value = biz.address || ''; $('f-area').value = biz.area || '';
+  $('f-phone').value = biz.phone || ''; $('f-email').value = biz.email || '';
+  ['facebook','instagram','website'].forEach(k => $('f-' + k).value = (biz.social || {})[k] || '');
+  $('aboutFields').innerHTML = ABOUT.map(([k, l]) => `<label for="a-${k}">${l}</label><input type="text" id="a-${k}" maxlength="200" value="${esc((biz.about || {})[k] || '')}">`).join('');
+  buildHours();
+  paintHeader(); paintPhotos(); paintHiring(); buildNav(); showSection(activeSection === 'name' || !SECTIONS.find(s => s.id === activeSection) ? 'name' : activeSection);
+  $('msg').textContent = '';
 }
 
-document.getElementById('saveProfileBtn').addEventListener('click', async () => {
-  const msg = document.getElementById('profileMsg');
-  msg.textContent = 'Saving...';
-  const res = await fetch('/api/me/profile', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
-    body: JSON.stringify({
-      username: document.getElementById('usernameInput').value.trim(),
-      avatarUrl
-    })
+function paintHeader(){
+  $('bizName').textContent = $('f-name').value || biz.name;
+  $('bizEmail').textContent = biz.email || me.email;
+  $('bizAvatar').innerHTML = state.imageUrl ? `<img src="${state.imageUrl}" alt="">` : esc(((biz.name || '?')[0]).toUpperCase());
+}
+function paintHiring(){ document.querySelectorAll('#hiringSeg button').forEach(b => b.classList.toggle('on', (b.dataset.v === '1') === state.hiring)); }
+
+function buildNav(){
+  $('nav').innerHTML = '';
+  SECTIONS.forEach(s => {
+    if (s.sep){ const d = document.createElement('div'); d.className = 'navSep'; $('nav').appendChild(d); return; }
+    if (s.ownerOnly && !biz.isOwner) return;
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'navItem' + (s.id === activeSection ? ' active' : '');
+    b.innerHTML = `<span>${s.label}</span>${s.tool ? '<span class="ext" aria-hidden="true">↗</span>' : ''}`;
+    b.addEventListener('click', () => s.tool ? (location.href = `/account.html?tool=${s.tool}&biz=${biz._id}`) : showSection(s.id));
+    $('nav').appendChild(b);
   });
-  const data = await res.json();
-  msg.textContent = res.ok ? 'Saved!' : (data.error || 'Could not save profile.');
+}
+
+function showSection(id){
+  activeSection = id;
+  const s = SECTIONS.find(x => x.id === id);
+  $('secTitle').textContent = s.title;
+  document.querySelectorAll('.navItem').forEach((el, i) => {});
+  buildNav();
+  $('subTabs').innerHTML = '';
+  $('subTabs').style.display = s.subs.length > 1 ? 'flex' : 'none';
+  s.subs.forEach(([k, label]) => {
+    const t = document.createElement('button');
+    t.type = 'button'; t.className = 'subTab'; t.textContent = label; t.dataset.k = k;
+    t.addEventListener('click', () => showSub(k));
+    $('subTabs').appendChild(t);
+  });
+  showSub(s.subs[0][0]);
+}
+function showSub(k){
+  activeSub = k;
+  document.querySelectorAll('.subTab').forEach(t => t.classList.toggle('active', t.dataset.k === k));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('show', p.dataset.field === k));
+}
+
+// ---- Hours ----
+function buildHours(){
+  const h = (biz.hours && typeof biz.hours === 'object') ? biz.hours : {};
+  $('hoursNote').textContent = typeof biz.hours === 'string' && biz.hours ? `Currently shown as: "${biz.hours}". Change any day below to switch to per-day hours.` : '';
+  $('hoursBox').innerHTML = DAYS.map(([k, l]) => {
+    const d = h[k] || { open: '09:00', close: '17:00', closed: false };
+    return `<div class="hoursRow" data-day="${k}"><strong>${l}</strong><input type="time" class="ho" value="${d.open}" aria-label="${l} opens"><input type="time" class="hc" value="${d.close}" aria-label="${l} closes"><label><input type="checkbox" class="hx"${d.closed ? ' checked' : ''}> Closed</label></div>`;
+  }).join('');
+  $('hoursBox').querySelectorAll('input').forEach(i => i.addEventListener('input', () => hoursTouched = true));
+  $('hoursBox').querySelectorAll('.hx').forEach(c => c.addEventListener('change', () => { hoursTouched = true; const r = c.closest('.hoursRow'); r.querySelectorAll('input[type=time]').forEach(t => t.disabled = c.checked); }));
+  $('hoursBox').querySelectorAll('.hx').forEach(c => { if (c.checked) c.closest('.hoursRow').querySelectorAll('input[type=time]').forEach(t => t.disabled = true); });
+}
+function readHours(){
+  const out = {};
+  document.querySelectorAll('.hoursRow').forEach(r => { out[r.dataset.day] = { open: r.querySelector('.ho').value, close: r.querySelector('.hc').value, closed: r.querySelector('.hx').checked }; });
+  return out;
+}
+
+// ---- Photos ----
+const GRIDS = { main: ['g-main', 'imageUrl'], photos: ['g-photos', 'photos'], menu: ['g-menu', 'menu'], highlights: ['g-highlights', 'highlights'] };
+function paintPhotos(){
+  Object.entries(GRIDS).forEach(([key, [gid, sk]]) => {
+    const items = key === 'main' ? (state.imageUrl ? [state.imageUrl] : []) : state[sk];
+    $(gid).innerHTML = '';
+    items.forEach((url, i) => {
+      const w = document.createElement('div'); w.className = 'ph';
+      w.innerHTML = `<img src="${url}" alt=""><button type="button" class="rm" aria-label="Remove photo">✕</button>`;
+      w.querySelector('.rm').addEventListener('click', () => { if (key === 'main') state.imageUrl = ''; else state[sk].splice(i, 1); paintPhotos(); paintHeader(); });
+      $(gid).appendChild(w);
+    });
+  });
+}
+document.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => { photoTarget = b.dataset.add; $('photoInput').multiple = photoTarget !== 'main'; $('photoInput').click(); }));
+function shrink(file){
+  return new Promise(res => {
+    const r = new FileReader();
+    r.onload = e => { const img = new Image(); img.onload = () => {
+      const m = 800; let w = img.width, h = img.height;
+      if (w > m || h > m){ if (w > h){ h = Math.round(h * m / w); w = m; } else { w = Math.round(w * m / h); h = m; } }
+      const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(img, 0, 0, w, h);
+      res(c.toDataURL('image/jpeg', 0.75)); }; img.src = e.target.result; };
+    r.readAsDataURL(file);
+  });
+}
+$('photoInput').addEventListener('change', async e => {
+  const files = [...e.target.files].filter(f => f.type.startsWith('image/')); e.target.value = '';
+  if (!files.length) return;
+  const urls = await Promise.all(files.map(shrink));
+  if (photoTarget === 'main') state.imageUrl = urls[0];
+  else { const sk = GRIDS[photoTarget][1]; state[sk] = [...state[sk], ...urls].slice(0, 10); }
+  paintPhotos(); paintHeader();
 });
 
-document.getElementById('logoutBtn').addEventListener('click', () => {
-  localStorage.removeItem('ttp_token');
-  window.location.href = '/account.html';
-});
+// ---- Hiring (saves immediately) ----
+document.querySelectorAll('#hiringSeg button').forEach(b => b.addEventListener('click', async () => {
+  const v = b.dataset.v === '1', prev = state.hiring;
+  state.hiring = v; paintHiring();
+  const ok = await put({ hiring: v });
+  if (!ok){ state.hiring = prev; paintHiring(); } else biz.hiring = v;
+}));
 
-// ---------------- Your Business: inline accordion editor ----------------
-async function loadBusinesses(){
-  const box = document.getElementById('bizAccordion');
-  box.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">Loading...</p>';
-  const res = await fetch('/api/my/businesses', { headers: { 'x-auth-token': token } });
-  const list = await res.json();
-  if (!list.length){
-    box.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">You haven\'t created a business yet — head to Studio to create one.</p>';
-    return;
+async function put(body){
+  const res = await fetch('/api/my/businesses/' + biz._id, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'x-auth-token': token }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  $('msg').textContent = res.ok ? '' : (data.error || 'Could not save.');
+  return res.ok;
+}
+
+$('saveBtn').addEventListener('click', async () => {
+  $('msg').textContent = 'Saving...';
+  const about = {}; ABOUT.forEach(([k]) => about[k] = $('a-' + k).value);
+  const social = {}; ['facebook','instagram','website'].forEach(k => social[k] = $('f-' + k).value);
+  const body = {
+    name: $('f-name').value, category: $('f-category').value, description: $('f-description').value,
+    address: $('f-address').value, area: $('f-area').value, phone: $('f-phone').value, email: $('f-email').value,
+    imageUrl: state.imageUrl, photos: state.photos, menuPhotos: state.menu, highlights: state.highlights, about, social
+  };
+  if (!body.name.trim()){ $('msg').textContent = 'Business name is required.'; return; }
+  if (hoursTouched) body.hours = readHours();
+  if (await put(body)){
+    Object.assign(biz, body, { menuPhotos: state.menu }); if (body.hours) biz.hours = body.hours;
+    hoursTouched = false;
+    $('bizSwitch').querySelector(`option[value="${biz._id}"]`).textContent = body.name + (biz.isOwner ? '' : ' (collaborator)');
+    paintHeader(); $('msg').textContent = 'Saved!';
   }
-  const myRes = await fetch('/api/me', { headers: { 'x-auth-token': token } });
-  const me = await myRes.json();
+});
 
-  box.innerHTML = '';
-  list.forEach(biz => {
-    const isOwner = biz.ownerId === me.id;
-    const row = document.createElement('div');
-    row.className = 'bizAccordionRow';
-    const head = document.createElement('div');
-    head.className = 'bizAccordionHead';
-    head.innerHTML = `<span>${escapeHtml(biz.name)}<span class="meta">${escapeHtml(biz.area || '')}</span>${isOwner ? '' : '<span class="collabTag">🤝 Collaborator</span>'}</span><span class="chev">▶</span>`;
-    const body = document.createElement('div');
-    body.className = 'bizAccordionBody';
-    body.innerHTML = bizFormHtml(biz);
-    head.addEventListener('click', () => {
-      const isOpen = body.classList.contains('open');
-      document.querySelectorAll('.bizAccordionBody.open').forEach(b => b.classList.remove('open'));
-      document.querySelectorAll('.bizAccordionHead.open').forEach(h => h.classList.remove('open'));
-      if (!isOpen){
-        body.classList.add('open');
-        head.classList.add('open');
-        wireBizForm(body, biz);
-      }
-    });
-    row.appendChild(head);
-    row.appendChild(body);
-    box.appendChild(row);
-
-    if (deepLinkBizId && biz._id === deepLinkBizId){
-      body.classList.add('open');
-      head.classList.add('open');
-      wireBizForm(body, biz);
-      setTimeout(() => row.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
-    }
-  });
-}
-
-function bizFormHtml(biz){
-  return `
-    <label>Business Name</label>
-    <input type="text" class="bf-name" value="${escapeHtml(biz.name || '')}">
-    <label>Category</label>
-    <input type="text" class="bf-category" value="${escapeHtml(biz.category || '')}">
-    <label>Description</label>
-    <textarea class="bf-description">${escapeHtml(biz.description || '')}</textarea>
-    <label>Address</label>
-    <input type="text" class="bf-address" value="${escapeHtml(biz.address || '')}">
-    <label>Area</label>
-    <input type="text" class="bf-area" value="${escapeHtml(biz.area || '')}">
-    <label>Phone</label>
-    <input type="text" class="bf-phone" value="${escapeHtml(biz.phone || '')}">
-    <label>Email</label>
-    <input type="text" class="bf-email" value="${escapeHtml(biz.email || '')}">
-    <label>Hours</label>
-    <input type="text" class="bf-hours" value="${escapeHtml(typeof biz.hours === 'string' ? biz.hours : '')}" placeholder="e.g. Mon-Sat 11am-9pm">
-    <label>Main Photo</label>
-    <div class="dropZone bf-dropzone">
-      <div class="bf-dropzone-text">📷 Click to choose a photo${biz.imageUrl ? ' (or leave as is to keep the current one)' : ''}</div>
-      <img class="bf-preview" style="${biz.imageUrl ? '' : 'display:none;'}" src="${biz.imageUrl || ''}">
-    </div>
-    <input type="file" class="bf-fileinput" accept="image/*" style="display:none;">
-    <p style="font-size:12px;color:var(--text-muted);margin-top:14px;">Photo galleries, About info, and social links aren't editable here yet — those still live in the full Studio form for now.</p>
-    <button type="button" class="bf-save">Save Changes</button>
-    <div class="msg bf-msg"></div>
-  `;
-}
-
-function wireBizForm(body, biz){
-  if (body.dataset.wired) return;
-  body.dataset.wired = '1';
-  let newImageUrl = biz.imageUrl || '';
-
-  const dropzone = body.querySelector('.bf-dropzone');
-  const fileInput = body.querySelector('.bf-fileinput');
-  const preview = body.querySelector('.bf-preview');
-  const dzText = body.querySelector('.bf-dropzone-text');
-  dropzone.addEventListener('click', () => fileInput.click());
-  fileInput.addEventListener('change', (e) => {
-    if (!e.target.files[0]) return;
-    const file = e.target.files[0];
-    if (!file.type.startsWith('image/')){ alert('Please choose an image file.'); return; }
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const img = new Image();
-      img.onload = () => {
-        const maxDim = 800;
-        let w = img.width, h = img.height;
-        if (w > maxDim || h > maxDim){
-          if (w > h){ h = Math.round(h * maxDim / w); w = maxDim; }
-          else { w = Math.round(w * maxDim / h); h = maxDim; }
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        newImageUrl = canvas.toDataURL('image/jpeg', 0.75);
-        preview.src = newImageUrl;
-        preview.style.display = 'block';
-        dzText.style.display = 'none';
-      };
-      img.src = evt.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
-
-  body.querySelector('.bf-save').addEventListener('click', async () => {
-    const msg = body.querySelector('.bf-msg');
-    msg.textContent = 'Saving...';
-    const res = await fetch('/api/my/businesses/' + biz._id, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
-      body: JSON.stringify({
-        name: body.querySelector('.bf-name').value,
-        category: body.querySelector('.bf-category').value,
-        description: body.querySelector('.bf-description').value,
-        address: body.querySelector('.bf-address').value,
-        area: body.querySelector('.bf-area').value,
-        phone: body.querySelector('.bf-phone').value,
-        email: body.querySelector('.bf-email').value,
-        hours: body.querySelector('.bf-hours').value,
-        imageUrl: newImageUrl
-      })
-    });
-    const data = await res.json();
-    msg.textContent = res.ok ? 'Saved!' : (data.error || 'Could not save changes.');
-  });
-}
+$('bizSwitch').addEventListener('change', e => selectBiz(e.target.value));
+$('createNewBtn').addEventListener('click', () => location.href = '/account.html');
+['f-name'].forEach(id => $(id).addEventListener('input', () => $('bizName').textContent = $(id).value));
 
 init();
 </script>

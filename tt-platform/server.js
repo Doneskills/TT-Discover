@@ -451,6 +451,8 @@ app.get('/api/me', requireUser, async (req, res) => {
     premiumMethod: user.premiumMethod || null,
     premiumExpiresAt: user.premiumExpiresAt || null,
     username: user.username || '',
+    realName: user.realName || '',
+    bio: user.bio || '',
     avatarUrl: user.avatarUrl || ''
   });
 });
@@ -472,12 +474,14 @@ app.post('/api/me/profile', requireUser, async (req, res) => {
   try {
     const b = req.body || {};
     const username = String(b.username || '').trim().slice(0, 30);
+    const realName = String(b.realName || '').trim().slice(0, 60);
+    const bio = String(b.bio || '').trim().slice(0, 200);
     const avatarUrl = String(b.avatarUrl || '');
     if (avatarUrl.length > 2 * 1024 * 1024){
       return res.status(400).json({ error: 'That image is too large — please choose a smaller one.' });
     }
-    await usersCol.updateOne({ _id: req.user._id }, { $set: { username, avatarUrl } });
-    res.json({ ok: true, username, avatarUrl });
+    await usersCol.updateOne({ _id: req.user._id }, { $set: { username, realName, bio, avatarUrl } });
+    res.json({ ok: true, username, realName, bio, avatarUrl });
   } catch (err) {
     res.status(500).json({ error: 'Could not save profile.' });
   }
