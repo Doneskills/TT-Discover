@@ -250,7 +250,6 @@
   </div>
 </div>
 
-<footer><a href="#" id="footerAboutLink" style="color:inherit;text-decoration:underline;">About Us</a></footer>
 
 <script>
 let allBusinesses = [];
@@ -338,10 +337,6 @@ document.getElementById('menuAbout').addEventListener('click', () => {
 document.getElementById('menuLogout').addEventListener('click', () => {
   localStorage.removeItem('ttp_token');
   window.location.reload();
-});
-document.getElementById('footerAboutLink').addEventListener('click', (e) => {
-  e.preventDefault();
-  document.getElementById('aboutModal').classList.add('open');
 });
 document.getElementById('aboutClose').addEventListener('click', () => {
   document.getElementById('aboutModal').classList.remove('open');

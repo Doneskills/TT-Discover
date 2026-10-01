@@ -176,6 +176,18 @@
   #mainView {
     width: 100vw; margin-left: calc(-50vw + 50%); margin-right: calc(-50vw + 50%);
   }
+  #studioNote {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin: 14px 16px 0; padding: 10px 14px; background: var(--soft-bg); border-radius: 10px; font-size: 13px;
+  }
+  #studioNote a { color: #e0562f; font-weight: 700; }
+  #studioNote button {
+    width: 26px; height: 26px; margin: 0; padding: 0; flex-shrink: 0; border-radius: 50%;
+    background: transparent; color: var(--text-muted); font-size: 14px; line-height: 1; border: none; cursor: pointer;
+  }
+  #studioNote button:hover { background: rgba(0,0,0,0.12); }
+  #mainView:not(:has(#studioBody[style*="none"])) #toolBizSelect { display: none !important; }
+  #studioNote.dismissed, #mainView:has(#studioBody[style*="none"]) #studioNote { display: none; }
   #studioTopBar {
     display: flex; align-items: center; justify-content: flex-end; gap: 14px;
     padding: 10px 16px; background: var(--card-bg); border-bottom: 1px solid var(--input-border);
@@ -363,25 +375,24 @@
 
   <div id="mainView" style="display:none;">
     <div id="studioTopBar">
-      <div class="studioTopIcons">
-        <span class="studioTopIcon" title="Search">🔍</span>
-        <span class="studioTopIcon" title="Help">❓</span>
-        <span class="studioTopIcon" title="Notifications">🔔</span>
-      </div>
       <select id="toolBizSelect" style="display:none;width:auto;padding:8px 10px;font-size:13px;margin:0;"></select>
+      <div id="hiddenToolBtns" style="display:none;">
       <button id="studioNewBtn" class="secondary" style="width:auto;padding:8px 14px;font-size:13px;margin:0;">+ New Business</button>
       <button id="studioListingsBtn" class="secondary" style="width:auto;padding:8px 14px;font-size:13px;margin:0;">📋 Your Businesses</button>
       <button id="studioAnalyticsBtn" class="secondary" style="width:auto;padding:8px 14px;font-size:13px;margin:0;">📊 Analytics</button>
       <button id="studioDealsBtn" class="secondary" style="width:auto;padding:8px 14px;font-size:13px;margin:0;">🔥 Deals</button>
       <button id="studioStaffBtn" class="secondary" style="width:auto;padding:8px 14px;font-size:13px;margin:0;">👥 Staff</button>
       <button id="studioCollabBtn" class="secondary" style="width:auto;padding:8px 14px;font-size:13px;margin:0;">🤝 Collaborators</button>
+      </div>
       <div class="studioAvatar" id="studioTopAvatar" title="Settings" style="cursor:pointer;"></div>
     </div>
 
+    <div id="studioNote" role="note">
+      <span>When you finish your business and it's live, to edit your info go to <a href="/settings.html">Settings</a>.</span>
+      <button type="button" id="studioNoteClose" aria-label="Dismiss">✕</button>
+    </div>
+
     <div id="studioBody">
-      <div class="card" style="margin-bottom:16px;background:var(--soft-bg);">
-        <p style="font-size:13px;margin:0;">Want to edit an existing business's info, hours, or photos? That now lives in <a href="/settings.html" style="color:#e0562f;font-weight:700;">Settings</a>, next to your profile. This page is just for creating a brand-new business.</p>
-      </div>
       <div id="studioSidebar">
         <div class="studioProfile">
           <div class="studioAvatarBig" id="studioAvatarBig"></div>
@@ -638,6 +649,13 @@ document.getElementById('toolBizSelect').addEventListener('change', (e) => {
 });
 document.getElementById('studioTopAvatar').addEventListener('click', () => {
   window.location.href = '/settings.html';
+});
+
+// ---------------- Dismissible "edit in Settings" note ----------------
+if (localStorage.getItem('ttp_studio_note_dismissed')) document.getElementById('studioNote').classList.add('dismissed');
+document.getElementById('studioNoteClose').addEventListener('click', () => {
+  document.getElementById('studioNote').classList.add('dismissed');
+  localStorage.setItem('ttp_studio_note_dismissed', '1');
 });
 
 // ---------------- Dark / light mode ----------------
