@@ -550,9 +550,11 @@ function renderDetailTabs(biz, activeTab){
         ${reviews.length ? reviews.map(r => reviewItemHtml(r, isOwner)).join('') : ''}
       </div>
       <h3 style="font-size:14px;margin:18px 0 8px;">Leave a Review</h3>
+      ${window.__me ? `
       <div class="reviewForm">
-        <label class="reviewFormLabel">Your Name (optional)</label>
-        <input type="text" id="reviewAuthorInput" placeholder="Anonymous" class="reviewFormInput">
+        <div class="hint" style="font-size:12px;color:var(--text-muted2);margin-bottom:10px;">
+          Posting as <b>${window.__me.username ? '@' + escapeHtml(window.__me.username) : 'Anonymous'}</b>${window.__me.username ? '' : ' — <a href="/profile.html" style="color:#e0562f;">add a username in your profile</a> to show your name'}
+        </div>
         <label class="reviewFormLabel">Rating</label>
         <div id="starPicker" class="starPicker" data-value="0">
           ${[1,2,3,4,5].map(n => `<span class="starPickerStar" data-star="${n}">☆</span>`).join('')}
@@ -561,7 +563,10 @@ function renderDetailTabs(biz, activeTab){
         <textarea id="reviewCommentInput" placeholder="Share your experience..." class="reviewFormInput" style="min-height:70px;resize:vertical;"></textarea>
         <button id="submitReviewBtn" style="margin-top:10px;">Submit Review</button>
         <div class="msg" id="reviewMsg"></div>
-      </div>
+      </div>` : `
+      <p style="font-size:14px;color:var(--text-muted2);">
+        <a href="/account.html" style="color:#e0562f;font-weight:700;">Sign in</a> to leave a review — your username is shown with it.
+      </p>`}
     `;
   } else if (activeTab === 'about'){
     const about = biz.about || {};
@@ -606,7 +611,7 @@ function renderDetailTabs(biz, activeTab){
 
 function wireReviewTab(biz){
   const picker = document.getElementById('starPicker');
-  picker.querySelectorAll('.starPickerStar').forEach(star => {
+  if (picker) picker.querySelectorAll('.starPickerStar').forEach(star => {
     star.addEventListener('click', () => {
       const val = Number(star.dataset.star);
       picker.dataset.value = val;
@@ -616,7 +621,8 @@ function wireReviewTab(biz){
     });
   });
 
-  document.getElementById('submitReviewBtn').addEventListener('click', async () => {
+  const submitReviewBtn = document.getElementById('submitReviewBtn');
+  if (submitReviewBtn) submitReviewBtn.addEventListener('click', async () => {
     const msg = document.getElementById('reviewMsg');
     const rating = Number(picker.dataset.value);
     const comment = document.getElementById('reviewCommentInput').value.trim();
@@ -626,9 +632,8 @@ function wireReviewTab(biz){
     try {
       const res = await fetch(`/api/businesses/${biz._id}/reviews`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-auth-token': localStorage.getItem('ttp_token') || '' },
         body: JSON.stringify({
-          authorName: document.getElementById('reviewAuthorInput').value.trim(),
           rating,
           comment
         })

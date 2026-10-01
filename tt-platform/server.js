@@ -837,7 +837,7 @@ app.delete('/api/my/businesses/:id/jobs/:jobId', requireUser, requireBusinessAcc
 });
 
 // Reviews are public — anyone can leave one, no account required.
-app.post('/api/businesses/:id/reviews', async (req, res) => {
+app.post('/api/businesses/:id/reviews', requireUser, async (req, res) => {
   if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
   try {
     const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
@@ -851,7 +851,8 @@ app.post('/api/businesses/:id/reviews', async (req, res) => {
     if (!comment) return res.status(400).json({ error: 'A comment is required.' });
     const review = {
       _id: new ObjectId(),
-      authorName: String(b.authorName || '').trim().slice(0, 60) || 'Anonymous',
+      authorName: String(req.user.username || '').trim().slice(0, 60) || 'Anonymous',
+      authorId: req.user._id.toString(),
       rating,
       comment,
       createdAt: new Date(),

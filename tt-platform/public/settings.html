@@ -84,6 +84,21 @@
   .photoGrid .ph { position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: var(--active); }
   .photoGrid img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .photoGrid .rm { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; padding: 0; border-radius: 50%; background: rgba(0,0,0,.65); font-size: 12px; line-height: 1; }
+  .toolNote { font-size: 13px; color: var(--muted); margin-bottom: 14px; line-height: 1.5; }
+  .listItem { border-bottom: 1px solid var(--border); padding: 12px 0; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .listItem .sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .listItem button { margin: 0; padding: 6px 12px; font-size: 12px; background: #7a2c2c; flex-shrink: 0; }
+  .badge { display: inline-block; font-size: 11px; background: var(--active); padding: 2px 8px; border-radius: 10px; margin-right: 4px; margin-top: 4px; }
+  .checkRow { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; font-size: 14px; }
+  .checkRow input { width: auto; }
+  .totalNum { font-size: 28px; font-weight: 700; }
+  .chart { display: flex; align-items: flex-end; gap: 3px; height: 150px; margin-top: 16px; border-bottom: 1px solid var(--border); }
+  .chart .bar { flex: 1; background: #e0562f; border-radius: 3px 3px 0 0; position: relative; min-height: 2px; }
+  .chart .bar:hover { background: #f2a33c; }
+  .chart .bar .tip { display: none; position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); background: var(--dark); color: #fff; font-size: 11px; padding: 3px 7px; border-radius: 5px; white-space: nowrap; z-index: 2; }
+  .chart .bar:hover .tip { display: block; }
+  .chartLabels { display: flex; gap: 3px; margin-top: 6px; }
+  .chartLabels span { flex: 1; font-size: 10px; color: var(--muted); white-space: nowrap; overflow: visible; }
   .savebar { margin-top: 28px; display: flex; align-items: center; gap: 14px; }
   .msg { font-size: 13px; color: #e0562f; }
   @media (max-width: 760px) {
@@ -169,6 +184,34 @@
     <div class="panel" data-field="instagram"><label for="f-instagram">Instagram</label><input type="url" id="f-instagram" placeholder="https://instagram.com/..."></div>
     <div class="panel" data-field="website"><label for="f-website">Website</label><input type="url" id="f-website" placeholder="https://..."></div>
 
+    <div class="panel" data-field="analytics"><div id="analyticsBody"></div></div>
+
+    <div class="panel" data-field="deals">
+      <p class="toolNote">Posting a new deal here emails customers following your area.</p>
+      <label for="d-title">Deal title</label><input type="text" id="d-title" maxlength="100" placeholder="e.g. 20% off lunch specials">
+      <label for="d-desc">Description</label><textarea id="d-desc" maxlength="300"></textarea>
+      <label for="d-end">Ends (optional)</label><input type="date" id="d-end">
+      <div class="savebar"><button type="button" class="primary" id="postDealBtn">Post Deal</button><span class="msg" id="dealMsg" role="status"></span></div>
+      <h3 style="font-size:16px;margin:26px 0 4px;">Current deals</h3><div id="dealsList"></div>
+    </div>
+
+    <div class="panel" data-field="staff">
+      <p class="toolNote">Add a staff member and choose what they can manage. They sign in separately from the Staff Login link.</p>
+      <label for="s-email">Email</label><input type="text" id="s-email" autocomplete="off">
+      <label for="s-pass">Password</label><input type="text" id="s-pass" autocomplete="off">
+      <label class="checkRow"><input type="checkbox" id="s-posts"> Can manage Posts</label>
+      <label class="checkRow"><input type="checkbox" id="s-deals"> Can manage Deals</label>
+      <div class="savebar"><button type="button" class="primary" id="addStaffBtn">Add Staff Member</button><span class="msg" id="staffMsg" role="status"></span></div>
+      <h3 style="font-size:16px;margin:26px 0 4px;">Current staff</h3><div id="staffList"></div>
+    </div>
+
+    <div class="panel" data-field="collab">
+      <p class="toolNote">A collaborator gets full access to edit this business — info, photos, hours, posts, jobs, deals and staff — using their own TT Discover business account. Only you can add or remove collaborators, or delete the listing.</p>
+      <label for="c-email">Their email (must already have a TT Discover business account)</label><input type="text" id="c-email" autocomplete="off">
+      <div class="savebar"><button type="button" class="primary" id="addCollabBtn">Add Collaborator</button><span class="msg" id="collabMsg" role="status"></span></div>
+      <h3 style="font-size:16px;margin:26px 0 4px;">Current collaborators</h3><div id="collabList"></div>
+    </div>
+
     <input type="file" id="photoInput" accept="image/*" multiple style="display:none;">
     <div class="savebar" id="savebar"><button type="button" class="primary" id="saveBtn">Save Changes</button><span class="msg" id="msg" role="status"></span></div>
   </main>
@@ -191,10 +234,10 @@ const SECTIONS = [
   { id: 'location', label: 'Location', title: 'Location', subs: [['address','Address'],['hours','Hours'],['contact','Phone & Email']] },
   { id: 'social', label: 'Social Media Links', title: 'Social Media Links', subs: [['facebook','Facebook'],['instagram','Instagram'],['website','Website']] },
   { sep: true },
-  { tool: 'collab', label: 'Collaborators', ownerOnly: true },
-  { tool: 'staff', label: 'Staff', ownerOnly: true },
-  { tool: 'analytics', label: 'Analytics' },
-  { tool: 'deals', label: 'Deals' }
+  { id: 'collab', label: 'Collaborators', title: 'Collaborators', ownerOnly: true, noSave: true, subs: [['collab','Collaborators']], load: () => renderCollab() },
+  { id: 'staff', label: 'Staff', title: 'Staff', ownerOnly: true, noSave: true, subs: [['staff','Staff']], load: () => renderStaff() },
+  { id: 'analytics', label: 'Analytics', title: 'Analytics', noSave: true, subs: [['analytics','Analytics']], load: () => renderAnalytics() },
+  { id: 'deals', label: 'Deals', title: 'Deals', noSave: true, subs: [['deals','Deals']], load: () => renderDeals() }
 ];
 
 let me, list = [], biz = null, state = {}, activeSection = 'name', activeSub = 'name', hoursTouched = false, photoTarget = null;
@@ -237,7 +280,7 @@ function selectBiz(id){
   ['facebook','instagram','website'].forEach(k => $('f-' + k).value = (biz.social || {})[k] || '');
   $('aboutFields').innerHTML = ABOUT.map(([k, l]) => `<label for="a-${k}">${l}</label><input type="text" id="a-${k}" maxlength="200" value="${esc((biz.about || {})[k] || '')}">`).join('');
   buildHours();
-  paintHeader(); paintPhotos(); paintHiring(); buildNav(); showSection(activeSection === 'name' || !SECTIONS.find(s => s.id === activeSection) ? 'name' : activeSection);
+  paintHeader(); paintPhotos(); paintHiring(); buildNav(); { const cur = SECTIONS.find(x => x.id === activeSection); showSection(!cur || (cur.ownerOnly && !biz.isOwner) ? 'name' : activeSection); }
   $('msg').textContent = '';
 }
 
@@ -255,8 +298,8 @@ function buildNav(){
     if (s.ownerOnly && !biz.isOwner) return;
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'navItem' + (s.id === activeSection ? ' active' : '');
-    b.innerHTML = `<span>${s.label}</span>${s.tool ? '<span class="ext" aria-hidden="true">↗</span>' : ''}`;
-    b.addEventListener('click', () => s.tool ? (location.href = `/account.html?tool=${s.tool}&biz=${biz._id}`) : showSection(s.id));
+    b.innerHTML = `<span>${s.label}</span>`;
+    b.addEventListener('click', () => showSection(s.id));
     $('nav').appendChild(b);
   });
 }
@@ -276,6 +319,8 @@ function showSection(id){
     $('subTabs').appendChild(t);
   });
   showSub(s.subs[0][0]);
+  $('savebar').style.display = s.noSave ? 'none' : 'flex';
+  if (s.load) s.load();
 }
 function showSub(k){
   activeSub = k;
@@ -373,6 +418,98 @@ $('saveBtn').addEventListener('click', async () => {
 $('bizSwitch').addEventListener('change', e => selectBiz(e.target.value));
 $('createNewBtn').addEventListener('click', () => location.href = '/account.html');
 ['f-name'].forEach(id => $(id).addEventListener('input', () => $('bizName').textContent = $(id).value));
+
+// ---------------- Tools: Analytics, Deals, Staff, Collaborators (inline) ----------------
+async function refreshBiz(){
+  const r = await fetch('/api/my/businesses', { headers: { 'x-auth-token': token } });
+  if (!r.ok) return;
+  list = await r.json();
+  const fresh = list.find(b => b._id === biz._id);
+  if (fresh) Object.assign(biz, fresh);
+}
+const api = (path, method, body) => fetch(`/api/my/businesses/${biz._id}/${path}`, {
+  method, headers: { 'Content-Type': 'application/json', 'x-auth-token': token }, body: body ? JSON.stringify(body) : undefined
+});
+const empty = t => `<p class="hint" style="margin-top:12px;">${t}</p>`;
+function listRow(html, label, onClick){
+  const row = document.createElement('div'); row.className = 'listItem';
+  row.innerHTML = `<div>${html}</div>`;
+  const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.addEventListener('click', onClick);
+  row.appendChild(b); return row;
+}
+
+async function renderAnalytics(){
+  await refreshBiz();
+  const days = [];
+  for (let i = 29; i >= 0; i--){ const d = new Date(); d.setDate(d.getDate() - i); days.push(d.toISOString().slice(0, 10)); }
+  const v = biz.viewsByDay || {};
+  const counts = days.map(d => v[d] || 0);
+  const total = counts.reduce((a, b) => a + b, 0), max = Math.max(1, ...counts);
+  const bars = counts.map((c, i) => {
+    const label = new Date(days[i]).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return `<div class="bar" style="height:${Math.max(Math.round(c / max * 100), c > 0 ? 4 : 2)}%;"><span class="tip">${label}: ${c} view${c === 1 ? '' : 's'}</span></div>`;
+  }).join('');
+  const labels = days.map((d, i) => `<span>${i % 5 === 0 ? new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : ''}</span>`).join('');
+  $('analyticsBody').innerHTML = `<p class="toolNote">${esc(biz.name)} — page views, last 30 days</p><div class="totalNum">${total}</div><div class="hint">total views in this period</div><div class="chart">${bars}</div><div class="chartLabels">${labels}</div>`;
+}
+
+async function renderDeals(){
+  await refreshBiz();
+  const box = $('dealsList'); const deals = biz.deals || [];
+  box.innerHTML = deals.length ? '' : empty('No deals posted yet.');
+  deals.forEach(d => {
+    const end = d.endDate ? ` · ends ${new Date(d.endDate).toLocaleDateString()}` : '';
+    box.appendChild(listRow(`<b>${esc(d.title)}</b><div class="sub">${esc(d.description || '')}</div><div class="sub">${new Date(d.createdAt || Date.now()).toLocaleDateString()}${end}</div>`, 'Delete', async () => { await api('deals/' + d._id, 'DELETE'); renderDeals(); }));
+  });
+}
+$('postDealBtn').addEventListener('click', async () => {
+  const msg = $('dealMsg'), title = $('d-title').value.trim();
+  if (!title){ msg.textContent = 'A deal title is required.'; return; }
+  msg.textContent = 'Posting...';
+  const res = await api('deals', 'POST', { title, description: $('d-desc').value.trim(), endDate: $('d-end').value });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok){ msg.textContent = 'Posted!'; ['d-title','d-desc','d-end'].forEach(id => $(id).value = ''); renderDeals(); }
+  else msg.textContent = data.error || 'Could not post deal.';
+});
+
+async function renderStaff(){
+  await refreshBiz();
+  const box = $('staffList'); const staff = biz.staff || [];
+  box.innerHTML = staff.length ? '' : empty('No staff added yet.');
+  staff.forEach(m => {
+    const p = m.permissions || {};
+    const badges = [p.posts ? '<span class="badge">Posts</span>' : '', p.deals ? '<span class="badge">Deals</span>' : ''].join('') || '<span class="badge">No permissions</span>';
+    box.appendChild(listRow(`<b>${esc(m.email)}</b><div>${badges}</div>`, 'Remove', async () => { await api('staff/' + m._id, 'DELETE'); renderStaff(); }));
+  });
+}
+$('addStaffBtn').addEventListener('click', async () => {
+  const msg = $('staffMsg'), email = $('s-email').value.trim(), password = $('s-pass').value;
+  if (!email){ msg.textContent = 'An email is required.'; return; }
+  if (password.length < 6){ msg.textContent = 'Password must be at least 6 characters.'; return; }
+  msg.textContent = 'Adding...';
+  const res = await api('staff', 'POST', { email, password, posts: $('s-posts').checked, deals: $('s-deals').checked });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok){ msg.textContent = 'Added!'; $('s-email').value = ''; $('s-pass').value = ''; $('s-posts').checked = false; $('s-deals').checked = false; renderStaff(); }
+  else msg.textContent = data.error || 'Could not add staff member.';
+});
+
+async function renderCollab(){
+  await refreshBiz();
+  const box = $('collabList'); const collabs = biz.collaborators || [];
+  box.innerHTML = collabs.length ? '' : empty('No collaborators yet.');
+  collabs.forEach(c => {
+    box.appendChild(listRow(`<b>${esc(c.email)}</b><div class="sub">Added ${new Date(c.addedAt).toLocaleDateString()}</div>`, 'Remove', async () => { await api('collaborators/' + c.userId, 'DELETE'); renderCollab(); }));
+  });
+}
+$('addCollabBtn').addEventListener('click', async () => {
+  const msg = $('collabMsg'), email = $('c-email').value.trim();
+  if (!email){ msg.textContent = 'An email is required.'; return; }
+  msg.textContent = 'Adding...';
+  const res = await api('collaborators', 'POST', { email });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok){ msg.textContent = 'Added!'; $('c-email').value = ''; renderCollab(); }
+  else msg.textContent = data.error || 'Could not add collaborator.';
+});
 
 init();
 </script>
