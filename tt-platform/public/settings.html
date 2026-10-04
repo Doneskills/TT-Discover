@@ -99,6 +99,11 @@
   .chart .bar:hover .tip { display: block; }
   .chartLabels { display: flex; gap: 3px; margin-top: 6px; }
   .chartLabels span { flex: 1; font-size: 10px; color: var(--muted); white-space: nowrap; overflow: visible; }
+  .miRow { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1fr) minmax(0,1.3fr) 34px; gap: 6px; margin-bottom: 6px; }
+  .miRow input { padding: 8px 10px; font-size: 14px; }
+  .miRow .rmItem { margin: 0; padding: 0; background: var(--active); color: var(--text); width: 34px; height: 100%; }
+  .hlName { margin-top: 6px; padding: 7px 10px; font-size: 13px; }
+  .viewLink { display: inline-block; margin-top: 10px; font-size: 13px; color: #e0562f; text-decoration: none; font-weight: 600; }
   .savebar { margin-top: 28px; display: flex; align-items: center; gap: 14px; }
   .msg { font-size: 13px; color: #e0562f; }
   @media (max-width: 760px) {
@@ -141,6 +146,7 @@
       <div class="bizAvatar" id="bizAvatar"></div>
       <div class="n" id="bizName"></div>
       <div class="e" id="bizEmail"></div>
+      <a class="viewLink" id="viewPage" href="#" target="_blank" rel="noopener">View my page ↗</a>
       <select id="bizSwitch" style="display:none;" aria-label="Choose business"></select>
     </div>
     <nav id="nav"></nav>
@@ -157,10 +163,13 @@
     <div class="subTabs" id="subTabs"></div>
 
     <div class="panel" data-field="name"><label for="f-name">Business name</label><input type="text" id="f-name" maxlength="100"></div>
+    <div class="panel" data-field="tagline"><label for="f-tagline">Business title</label><input type="text" id="f-tagline" maxlength="60" placeholder="e.g. Home-style Creole food"><div class="hint">Shown big on your page next to the menu.</div></div>
     <div class="panel" data-field="category"><label for="f-category">Business category</label><input type="text" id="f-category" maxlength="40" placeholder="e.g. Restaurant, Bakery, Food truck"></div>
 
     <div class="panel" data-field="description"><label for="f-description">Description</label><textarea id="f-description" maxlength="500"></textarea></div>
     <div class="panel" data-field="photos">
+      <label>Logo</label><div class="photoGrid" id="g-logo"></div>
+      <button type="button" class="ghost" data-add="logo" style="margin-top:8px;">Choose logo</button>
       <label>Main photo</label><div class="photoGrid" id="g-main"></div>
       <button type="button" class="ghost" data-add="main" style="margin-top:8px;">Choose main photo</button>
       <label>Photos of the business</label><div class="photoGrid" id="g-photos"></div>
@@ -172,6 +181,12 @@
       <label>Highlights</label><div class="photoGrid" id="g-highlights"></div>
       <button type="button" class="ghost" data-add="highlights" style="margin-top:8px;">Add highlight photos</button>
       <div class="hint">Up to 10 photos in each group.</div>
+      <div id="hlNames"></div>
+      <label>Menu items</label>
+      <div class="hint" style="margin:0 0 8px;">Name, price, and a section (like Desserts or Signature).</div>
+      <div id="menuItemsBox"></div>
+      <datalist id="sectionList"><option value="Desserts"><option value="Signature"><option value="Regular"><option value="Premium"><option value="Drinks"></datalist>
+      <button type="button" class="ghost" id="addItemBtn" style="margin-top:8px;">Add menu item</button>
     </div>
 
     <div class="panel" data-field="about" id="aboutFields"></div>
@@ -228,7 +243,7 @@ const DAYS = [['mon','Mon'],['tue','Tue'],['wed','Wed'],['thu','Thu'],['fri','Fr
 
 // Sidebar sections. "tool" entries open the matching Studio panel (owner-only ones are hidden for collaborators).
 const SECTIONS = [
-  { id: 'name', label: 'Business Name', title: 'Your Business', subs: [['name','Business Name'],['category','Business Category']] },
+  { id: 'name', label: 'Business Name', title: 'Your Business', subs: [['name','Business Name'],['tagline','Business Title'],['category','Business Category']] },
   { id: 'overview', label: 'Overview', title: 'Overview', subs: [['description','Description'],['photos','Photos'],['menu','Menu & Highlights']] },
   { id: 'about', label: 'About', title: 'About', subs: [['about','About']] },
   { id: 'location', label: 'Location', title: 'Location', subs: [['address','Address'],['hours','Hours'],['contact','Phone & Email']] },
@@ -270,16 +285,19 @@ function selectBiz(id){
   $('bizSwitch').value = id;
   state = {
     imageUrl: biz.imageUrl || '', photos: [...(biz.photos || [])], menu: [...(biz.menuPhotos || [])], highlights: [...(biz.highlights || [])],
-    hiring: !!biz.hiring
+    hiring: !!biz.hiring, logoUrl: biz.logoUrl || '',
+    menuItems: (biz.menuItems || []).map(i => ({ ...i })), highlightNames: [...(biz.highlightNames || [])]
   };
   hoursTouched = false;
+  $('viewPage').href = '/biz/' + biz._id;
+  $('f-tagline').value = biz.tagline || '';
   $('f-name').value = biz.name || ''; $('f-category').value = biz.category || '';
   $('f-description').value = biz.description || '';
   $('f-address').value = biz.address || ''; $('f-area').value = biz.area || '';
   $('f-phone').value = biz.phone || ''; $('f-email').value = biz.email || '';
   ['facebook','instagram','website'].forEach(k => $('f-' + k).value = (biz.social || {})[k] || '');
   $('aboutFields').innerHTML = ABOUT.map(([k, l]) => `<label for="a-${k}">${l}</label><input type="text" id="a-${k}" maxlength="200" value="${esc((biz.about || {})[k] || '')}">`).join('');
-  buildHours();
+  buildHours(); paintMenuItems();
   paintHeader(); paintPhotos(); paintHiring(); buildNav(); { const cur = SECTIONS.find(x => x.id === activeSection); showSection(!cur || (cur.ownerOnly && !biz.isOwner) ? 'name' : activeSection); }
   $('msg').textContent = '';
 }
@@ -347,20 +365,46 @@ function readHours(){
 }
 
 // ---- Photos ----
-const GRIDS = { main: ['g-main', 'imageUrl'], photos: ['g-photos', 'photos'], menu: ['g-menu', 'menu'], highlights: ['g-highlights', 'highlights'] };
+const GRIDS = { main: ['g-main', 'imageUrl'], photos: ['g-photos', 'photos'], menu: ['g-menu', 'menu'], highlights: ['g-highlights', 'highlights'], logo: ['g-logo', 'logoUrl'] };
 function paintPhotos(){
   Object.entries(GRIDS).forEach(([key, [gid, sk]]) => {
-    const items = key === 'main' ? (state.imageUrl ? [state.imageUrl] : []) : state[sk];
+    const single = key === 'main' || key === 'logo';
+    const items = single ? (state[sk] ? [state[sk]] : []) : state[sk];
     $(gid).innerHTML = '';
     items.forEach((url, i) => {
       const w = document.createElement('div'); w.className = 'ph';
       w.innerHTML = `<img src="${url}" alt=""><button type="button" class="rm" aria-label="Remove photo">✕</button>`;
-      w.querySelector('.rm').addEventListener('click', () => { if (key === 'main') state.imageUrl = ''; else state[sk].splice(i, 1); paintPhotos(); paintHeader(); });
+      w.querySelector('.rm').addEventListener('click', () => { if (single) state[sk] = ''; else { state[sk].splice(i, 1); if (key === 'highlights') state.highlightNames.splice(i, 1); } paintPhotos(); paintHeader(); });
       $(gid).appendChild(w);
     });
   });
+  paintHlNames();
 }
-document.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => { photoTarget = b.dataset.add; $('photoInput').multiple = photoTarget !== 'main'; $('photoInput').click(); }));
+function paintHlNames(){
+  const box = $('hlNames'); box.innerHTML = '';
+  if (!state.highlights.length) return;
+  const l = document.createElement('label'); l.textContent = 'Highlight names (in the same order as the photos)'; box.appendChild(l);
+  state.highlights.forEach((_, i) => {
+    const inp = document.createElement('input'); inp.type = 'text'; inp.className = 'hlName'; inp.maxLength = 40;
+    inp.placeholder = 'Name for photo ' + (i + 1); inp.value = state.highlightNames[i] || '';
+    inp.addEventListener('input', () => { state.highlightNames[i] = inp.value; });
+    box.appendChild(inp);
+  });
+}
+function paintMenuItems(){
+  const box = $('menuItemsBox'); box.innerHTML = '';
+  state.menuItems.forEach((it, i) => {
+    const row = document.createElement('div'); row.className = 'miRow';
+    row.innerHTML = `<input type="text" placeholder="Name" maxlength="60" value="${esc(it.name)}" aria-label="Item name"><input type="text" placeholder="$0" maxlength="20" value="${esc(it.price)}" aria-label="Price"><input type="text" list="sectionList" placeholder="Section" maxlength="30" value="${esc(it.section)}" aria-label="Section"><button type="button" class="rmItem" aria-label="Remove item">✕</button>`;
+    const [n, pr, sec] = row.querySelectorAll('input');
+    n.addEventListener('input', () => it.name = n.value); pr.addEventListener('input', () => it.price = pr.value); sec.addEventListener('input', () => it.section = sec.value);
+    row.querySelector('.rmItem').addEventListener('click', () => { state.menuItems.splice(i, 1); paintMenuItems(); });
+    box.appendChild(row);
+  });
+}
+$('addItemBtn').addEventListener('click', () => { if (state.menuItems.length >= 80) return; state.menuItems.push({ name: '', price: '', section: '' }); paintMenuItems(); box_focus(); });
+function box_focus(){ const rows = document.querySelectorAll('.miRow'); if (rows.length) rows[rows.length - 1].querySelector('input').focus(); }
+document.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => { photoTarget = b.dataset.add; $('photoInput').multiple = photoTarget !== 'main' && photoTarget !== 'logo'; $('photoInput').click(); }));
 function shrink(file){
   return new Promise(res => {
     const r = new FileReader();
@@ -377,6 +421,7 @@ $('photoInput').addEventListener('change', async e => {
   if (!files.length) return;
   const urls = await Promise.all(files.map(shrink));
   if (photoTarget === 'main') state.imageUrl = urls[0];
+  else if (photoTarget === 'logo') state.logoUrl = urls[0];
   else { const sk = GRIDS[photoTarget][1]; state[sk] = [...state[sk], ...urls].slice(0, 10); }
   paintPhotos(); paintHeader();
 });
@@ -403,7 +448,9 @@ $('saveBtn').addEventListener('click', async () => {
   const body = {
     name: $('f-name').value, category: $('f-category').value, description: $('f-description').value,
     address: $('f-address').value, area: $('f-area').value, phone: $('f-phone').value, email: $('f-email').value,
-    imageUrl: state.imageUrl, photos: state.photos, menuPhotos: state.menu, highlights: state.highlights, about, social
+    imageUrl: state.imageUrl, photos: state.photos, menuPhotos: state.menu, highlights: state.highlights, about, social,
+    tagline: $('f-tagline').value, logoUrl: state.logoUrl, highlightNames: state.highlightNames.slice(0, state.highlights.length),
+    menuItems: state.menuItems.filter(i => i.name.trim())
   };
   if (!body.name.trim()){ $('msg').textContent = 'Business name is required.'; return; }
   if (hoursTouched) body.hours = readHours();

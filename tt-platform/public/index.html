@@ -488,6 +488,7 @@ function renderDetailTabs(biz, activeTab){
     panelHtml = `
       <h2>${escapeHtml(biz.name)}</h2>
       <div class="meta">${escapeHtml(biz.category)} · ${escapeHtml(biz.area)}</div>
+      <div style="margin:6px 0 10px;"><a href="/biz/${biz._id}" style="color:#e0562f;font-weight:700;font-size:13px;text-decoration:none;">Open full page →</a></div>
       ${biz.hiring ? '<div class="hiringBadge">📢 Hiring Now</div>' : ''}
       ${biz.hours ? `<div class="row"><b>Hours:</b> ${escapeHtml(formatHours(biz.hours))}</div>` : ''}
       <div class="desc">${escapeHtml(biz.description)}</div>

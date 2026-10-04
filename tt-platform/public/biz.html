@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--META-->
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: #23659b; --primary-soft: #3573a3; --bg: #f2f0eb; --text: #1f2a33; --muted: #5d6b76;
+    --accent: #c40d0d; --star: #f5b301; --line: #23659b;
+    --head: 'Oswald', 'Arial Narrow', Impact, sans-serif; --body: 'Poppins', 'Segoe UI', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--body); background: var(--bg); color: var(--text); min-height: 100vh; }
+  a { color: inherit; }
+  button, input, textarea { font-family: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .shell { display: grid; grid-template-columns: 230px minmax(0, 1fr); min-height: 100vh; }
+  .side { background: var(--primary); color: #f2f0eb; padding: 28px 18px; position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .logo { width: 84px; height: 84px; border-radius: 50%; background: #f2f0eb; border: 3px solid var(--accent); overflow: hidden; display: flex; align-items: center; justify-content: center; font-family: var(--head); font-size: 34px; color: var(--primary); flex-shrink: 0; }
+  .logo img { width: 100%; height: 100%; object-fit: cover; }
+  .sideName { font-family: var(--head); font-size: 20px; text-transform: uppercase; margin: 12px 0 18px; letter-spacing: .5px; }
+  .sideBig { font-family: var(--head); text-transform: uppercase; font-size: 54px; line-height: 1; margin: 34px 0; word-break: break-word; }
+  .nav { width: 100%; margin-top: auto; display: flex; flex-direction: column; gap: 4px; }
+  .nav a { text-decoration: none; padding: 11px 14px; border-radius: 8px; font-size: 15px; text-align: left; }
+  .nav a.active { background: rgba(255,255,255,.18); font-weight: 600; }
+  .nav a:hover { background: rgba(255,255,255,.1); }
+  .back { font-size: 12px; opacity: .85; margin-top: 14px; text-decoration: none; }
+
+  main { padding: 34px 40px 80px; min-width: 0; }
+  h1.title { font-family: var(--head); font-weight: 500; font-size: 36px; color: var(--primary); text-transform: uppercase; line-height: 1.1; }
+  h2.sec { font-family: var(--head); font-weight: 500; font-size: 28px; color: var(--primary); text-transform: uppercase; margin: 6px 0 12px; }
+  .ratingRow { display: flex; align-items: center; gap: 6px; font-size: 14px; margin-top: 6px; }
+  .stars { color: var(--star); letter-spacing: 1px; }
+  .stars .off { color: #cfc9bb; }
+  .meta { font-size: 14px; margin-top: 4px; }
+  .meta .open { color: #1a7a3c; font-weight: 600; } .meta .closed { color: var(--accent); font-weight: 600; }
+  hr.rule { border: none; border-top: 2px solid var(--line); margin: 16px 0; }
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .tile { position: relative; border-radius: 18px; overflow: hidden; aspect-ratio: 4/3; background: #d9d4c7; border-bottom: 7px solid var(--primary); cursor: zoom-in; }
+  .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .cap { font-size: 14px; margin-top: 6px; }
+  .desc { font-size: 15px; line-height: 1.7; max-width: 640px; white-space: pre-line; }
+  .empty { color: var(--muted); font-size: 14px; padding: 8px 0; }
+  .contact { margin-top: 28px; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
+  .pill { display: flex; align-items: center; gap: 12px; background: var(--primary-soft); color: #fff; text-decoration: none; padding: 8px 22px 8px 8px; border-radius: 30px; font-weight: 600; font-size: 16px; min-width: 240px; }
+  .pill .ic { width: 38px; height: 38px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .chip { background: #e4e0d6; border-radius: 16px; padding: 4px 12px; font-size: 13px; text-decoration: none; }
+  .deal { background: #fff7e0; border: 1px solid #f2c230; border-radius: 12px; padding: 12px 16px; margin-top: 16px; max-width: 640px; }
+  .deal b { color: var(--accent); }
+  .twoCol { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 40px; margin-top: 8px; }
+  .menuRow { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px dotted #b9b2a1; font-size: 15px; }
+  .menuRow span:last-child { font-weight: 600; white-space: nowrap; }
+
+  .sumWrap { display: flex; gap: 34px; align-items: center; flex-wrap: wrap; }
+  .bigNum { font-size: 56px; line-height: 1; font-weight: 500; }
+  .bars { flex: 1; min-width: 220px; max-width: 420px; }
+  .barRow { display: grid; grid-template-columns: 22px minmax(0, 1fr) 30px; gap: 8px; align-items: center; font-size: 13px; margin: 3px 0; }
+  .barTrack { background: #ddd8cb; height: 10px; border-radius: 5px; overflow: hidden; }
+  .barFill { background: var(--star); height: 100%; }
+  .rateRow { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .avatar { width: 44px; height: 44px; border-radius: 50%; border: 1.5px solid var(--text); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; background: var(--bg); overflow: hidden; }
+  .pick { font-size: 34px; background: none; border: none; cursor: pointer; color: #cfc9bb; padding: 0 2px; line-height: 1; }
+  .pick.on { color: var(--text); }
+  textarea.cmt { width: 100%; max-width: 560px; min-height: 80px; padding: 10px 12px; border-radius: 10px; border: 1px solid #b9b2a1; background: #fff; font-size: 14px; margin-top: 10px; resize: vertical; }
+  .btn { background: var(--primary-soft); color: #fff; border: none; border-radius: 12px; padding: 9px 18px; font-size: 14px; cursor: pointer; }
+  .btn.sel { background: var(--primary); box-shadow: inset 0 0 0 2px #0f3a5c; }
+  .tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .iconBtn { width: 40px; height: 40px; border-radius: 50%; border: none; background: none; cursor: pointer; font-size: 20px; }
+  #search { padding: 9px 12px; border-radius: 10px; border: 1px solid #b9b2a1; font-size: 14px; min-width: 0; flex: 1 1 160px; max-width: 280px; display: none; }
+  .review { display: flex; gap: 12px; padding: 16px 0; border-bottom: 1px solid #d9d4c7; }
+  .review .who { font-weight: 600; font-size: 15px; } .review .when { font-size: 12px; color: var(--muted); margin-left: 8px; }
+  .review p { font-size: 14px; line-height: 1.6; margin-top: 4px; white-space: pre-line; }
+  .reply { background: #e4e0d6; border-radius: 10px; padding: 8px 12px; margin-top: 8px; font-size: 13px; }
+  .msg { font-size: 13px; color: var(--accent); margin-top: 8px; min-height: 18px; }
+  #lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; align-items: center; justify-content: center; z-index: 50; padding: 20px; }
+  #lightbox.show { display: flex; }
+  #lightbox img { max-width: 100%; max-height: 100%; border-radius: 10px; }
+
+  @media (max-width: 760px) {
+    .shell { grid-template-columns: 1fr; }
+    .side { position: static; height: auto; flex-direction: row; flex-wrap: wrap; justify-content: flex-start; align-items: center; text-align: left; padding: 12px 14px; gap: 10px; }
+    .logo { width: 44px; height: 44px; font-size: 20px; border-width: 2px; }
+    .sideName { margin: 0; font-size: 17px; flex: 1; }
+    .sideBig, .back { display: none; }
+    .nav { flex-direction: row; margin: 0; width: 100%; overflow-x: auto; }
+    .nav a { padding: 8px 14px; white-space: nowrap; }
+    main { padding: 22px 16px 60px; }
+    h1.title { font-size: 28px; }
+    .grid, .grid.four { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .twoCol { grid-template-columns: 1fr; }
+    .contact { align-items: stretch; } .pill { min-width: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="logo" id="logo"></div>
+    <div class="sideName" id="sideName"></div>
+    <div class="sideBig" id="sideBig"></div>
+    <nav class="nav" id="nav" aria-label="Business pages"></nav>
+    <a class="back" href="/">← Back to TT Discover</a>
+  </aside>
+  <main id="main"><p class="empty">Loading...</p></main>
+</div>
+<div id="lightbox" role="dialog" aria-label="Photo"><img alt=""></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
+const bizId = location.pathname.split('/').filter(Boolean).pop();
+const token = localStorage.getItem('ttp_token') || '';
+let biz = null, me = null, sortMode = 'relevant', query = '', pickRating = 0;
+
+const DAYS = ['sun','mon','tue','wed','thu','fri','sat'];
+const PAGES = [['home','Home'],['menu','Menu'],['reviews','Reviews'],['photos','Photos']];
+
+function ratingOf(b){
+  const rs = b.reviews || [];
+  const count = rs.length;
+  const avg = count ? rs.reduce((a, r) => a + r.rating, 0) / count : 0;
+  return { count, avg };
+}
+function starsHtml(avg){
+  const full = Math.round(avg);
+  return `<span class="stars" aria-hidden="true">${[1,2,3,4,5].map(n => n <= full ? '★' : '<span class="off">★</span>').join('')}</span>`;
+}
+function fmt12(t){
+  if (!t) return '';
+  const [h, m] = t.split(':').map(Number);
+  return `${((h + 11) % 12) + 1}${m ? ':' + String(m).padStart(2, '0') : ''}${h >= 12 ? 'pm' : 'am'}`;
+}
+function openStatus(h){
+  if (!h || typeof h === 'string') return { text: typeof h === 'string' ? h : '', known: false };
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Port_of_Spain' }));
+  const d = h[DAYS[now.getDay()]];
+  if (!d || d.closed) return { text: 'Closed today', open: false, known: true };
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const [oh, om] = d.open.split(':').map(Number), [ch, cm] = d.close.split(':').map(Number);
+  const o = oh * 60 + om, c = ch * 60 + cm;
+  if (mins >= o && mins < c) return { text: `Open · Closes ${fmt12(d.close)}`, open: true, known: true };
+  if (mins < o) return { text: `Closed · Opens ${fmt12(d.open)}`, open: false, known: true };
+  return { text: 'Closed for today', open: false, known: true };
+}
+function hoursLines(h){
+  if (!h) return '';
+  if (typeof h === 'string') return esc(h);
+  const names = { mon:'Mon', tue:'Tue', wed:'Wed', thu:'Thu', fri:'Fri', sat:'Sat', sun:'Sun' };
+  return Object.keys(names).filter(k => h[k]).map(k => `${names[k]}: ${h[k].closed ? 'Closed' : fmt12(h[k].open) + ' – ' + fmt12(h[k].close)}`).join(' · ');
+}
+
+function route(){ const p = (location.hash || '#home').slice(1); return PAGES.some(x => x[0] === p) ? p : 'home'; }
+
+function paintShell(){
+  $('logo').innerHTML = biz.logoUrl ? `<img src="${biz.logoUrl}" alt="">` : esc((biz.name || '?')[0].toUpperCase());
+  $('sideName').textContent = biz.name;
+  $('sideBig').textContent = biz.tagline || 'Menu';
+  const cur = route();
+  $('nav').innerHTML = PAGES.map(([k, l]) => `<a href="#${k}" class="${k === cur ? 'active' : ''}" ${k === cur ? 'aria-current="page"' : ''}>${l}</a>`).join('');
+}
+
+function render(){
+  paintShell();
+  const p = route();
+  const m = $('main');
+  m.innerHTML = p === 'home' ? homeHtml() : p === 'menu' ? menuHtml() : p === 'reviews' ? reviewsHtml() : photosHtml();
+  window.scrollTo(0, 0);
+  if (p === 'reviews') wireReviews();
+  m.querySelectorAll('.tile img').forEach(i => i.addEventListener('click', () => { $('lightbox').querySelector('img').src = i.src; $('lightbox').classList.add('show'); }));
+}
+
+function tiles(urls, cls){ return urls.length ? `<div class="grid ${cls || ''}">${urls.map(u => `<div class="tile"><img src="${u}" alt="" loading="lazy"></div>`).join('')}</div>` : ''; }
+
+function homeHtml(){
+  const r = ratingOf(biz), st = openStatus(biz.hours);
+  const pics = [biz.imageUrl, ...(biz.photos || [])].filter(Boolean).slice(0, 6);
+  const now = new Date();
+  const deals = (biz.deals || []).filter(d => !d.endDate || new Date(d.endDate) >= now);
+  const soc = biz.social || {};
+  return `
+    <h1 class="title">${esc(biz.name)}</h1>
+    <div class="ratingRow">${r.count ? `<b>${r.avg.toFixed(1)}</b>${starsHtml(r.avg)}<span>(${r.count})</span>` : '<span class="empty" style="padding:0">No reviews yet</span>'}</div>
+    <div class="meta">${st.known ? `<span class="${st.open ? 'open' : 'closed'}">${esc(st.text)}</span>` : esc(st.text)}${biz.hours ? ` <span style="color:var(--muted);font-size:12px;display:block">${hoursLines(biz.hours)}</span>` : ''}</div>
+    ${biz.address || biz.area ? `<div class="meta">📍 ${esc([biz.address, biz.area].filter(Boolean).join(', '))}</div>` : ''}
+    <hr class="rule">
+    ${pics.length ? tiles(pics) : '<p class="empty">No photos yet.</p>'}
+    <hr class="rule" style="margin-top:22px">
+    <h2 class="sec">Description</h2>
+    <p class="desc">${esc(biz.description) || '<span class="empty">No description yet.</span>'}</p>
+    ${deals.map(d => `<div class="deal"><b>🔥 ${esc(d.title)}</b><br>${esc(d.description)}</div>`).join('')}
+    ${biz.hiring ? '<div class="chips"><span class="chip">💼 Hiring now</span></div>' : ''}
+    <div class="chips">${['facebook','instagram','website'].filter(k => soc[k]).map(k => `<a class="chip" href="${esc(soc[k])}" target="_blank" rel="noopener">${k[0].toUpperCase() + k.slice(1)}</a>`).join('')}</div>
+    <div class="contact">
+      ${biz.email ? `<a class="pill" href="mailto:${esc(biz.email)}"><span class="ic">✉</span>${esc(biz.email)}</a>` : ''}
+      ${biz.phone ? `<a class="pill" href="tel:${esc(biz.phone)}"><span class="ic">📞</span>${esc(biz.phone)}</a>` : ''}
+    </div>`;
+}
+
+function menuHtml(){
+  const mp = biz.menuPhotos || [], hl = biz.highlights || [], names = biz.highlightNames || [];
+  const sections = [];
+  (biz.menuItems || []).forEach(i => {
+    const key = i.section || 'Menu';
+    let s = sections.find(x => x.key === key);
+    if (!s){ s = { key, items: [] }; sections.push(s); }
+    s.items.push(i);
+  });
+  return `
+    <h2 class="sec">Menu</h2>
+    ${mp.length ? tiles(mp, 'four') : '<p class="empty">No menu photos yet.</p>'}
+    <hr class="rule" style="margin:22px 0 14px">
+    <h2 class="sec">Highlights</h2>
+    ${hl.length ? `<div class="grid four">${hl.map((u, i) => `<div><div class="tile"><img src="${u}" alt="" loading="lazy"></div><div class="cap">${esc(names[i] || '')}</div></div>`).join('')}</div>` : '<p class="empty">No highlights yet.</p>'}
+    ${sections.length ? `<hr class="rule" style="margin:22px 0 14px"><div class="twoCol">${sections.map(s => `<section><h2 class="sec">${esc(s.key)}</h2>${s.items.map(i => `<div class="menuRow"><span>${esc(i.name)}</span><span>${esc(i.price)}</span></div>`).join('')}</section>`).join('')}</div>` : ''}`;
+}
+
+function photosHtml(){
+  const all = [biz.imageUrl, ...(biz.photos || []), ...(biz.menuPhotos || []), ...(biz.highlights || [])].filter(Boolean);
+  return `
+    <h2 class="sec">Photos</h2><hr class="rule" style="margin-top:0">
+    <div class="tools" style="margin-bottom:16px"><button class="btn sel" type="button">All</button></div>
+    ${all.length ? tiles(all) : '<p class="empty">No photos yet.</p>'}`;
+}
+
+function sortedReviews(){
+  let list = [...(biz.reviews || [])];
+  const q = query.trim().toLowerCase();
+  if (q) list = list.filter(r => (r.comment + ' ' + r.authorName).toLowerCase().includes(q));
+  if (sortMode === 'newest') list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  else if (sortMode === 'highest') list.sort((a, b) => b.rating - a.rating || new Date(b.createdAt) - new Date(a.createdAt));
+  else if (sortMode === 'lowest') list.sort((a, b) => a.rating - b.rating || new Date(b.createdAt) - new Date(a.createdAt));
+  else list.sort((a, b) => (b.comment.length - a.comment.length) || (new Date(b.createdAt) - new Date(a.createdAt)));
+  return list;
+}
+function reviewListHtml(){
+  const list = sortedReviews();
+  if (!list.length) return `<p class="empty">${query ? 'No reviews match your search.' : 'No reviews yet. Be the first!'}</p>`;
+  return list.map(r => `
+    <div class="review"><div class="avatar">${esc((r.authorName || '?')[0].toUpperCase())}</div>
+      <div style="min-width:0"><div><span class="who">${esc(r.authorName)}</span><span class="when">${new Date(r.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span></div>
+        ${starsHtml(r.rating)}<p>${esc(r.comment)}</p>
+        ${r.reply ? `<div class="reply"><b>Owner reply:</b> ${esc(typeof r.reply === 'string' ? r.reply : r.reply.text)}</div>` : ''}</div></div>`).join('');
+}
+function reviewsHtml(){
+  const r = ratingOf(biz), counts = [5,4,3,2,1].map(n => (biz.reviews || []).filter(x => x.rating === n).length);
+  return `
+    <div class="sumWrap">
+      <div style="text-align:center"><div class="bigNum">${r.count ? r.avg.toFixed(1) : '–'}</div><div style="font-size:22px">${starsHtml(r.avg)}</div><div style="font-size:14px">(${r.count})</div></div>
+      <div class="bars" aria-label="Rating breakdown">${[5,4,3,2,1].map((n, i) => `<div class="barRow"><span>${n}★</span><div class="barTrack"><div class="barFill" style="width:${r.count ? Math.round(counts[i] / r.count * 100) : 0}%"></div></div><span>${counts[i]}</span></div>`).join('')}</div>
+    </div>
+    <hr class="rule">
+    <h2 class="sec">Rate and review</h2>
+    ${me ? `<div class="rateRow"><div class="avatar">${me.avatarUrl ? `<img src="${me.avatarUrl}" alt="" style="width:100%;height:100%;object-fit:cover">` : esc(((me.username || me.email || '?')[0]).toUpperCase())}</div>
+        <div id="picker" aria-label="Your rating">${[1,2,3,4,5].map(n => `<button type="button" class="pick" data-n="${n}" aria-label="${n} star${n > 1 ? 's' : ''}">★</button>`).join('')}</div></div>
+      <div style="font-size:12px;color:var(--muted);margin-top:6px">Posting as ${me.username ? '@' + esc(me.username) : 'Anonymous — <a href="/profile.html">add a username</a>'}</div>
+      <textarea class="cmt" id="cmt" maxlength="1000" placeholder="Share your experience..."></textarea><br>
+      <button class="btn" type="button" id="submitReview" style="margin-top:8px">Submit review</button><div class="msg" id="rmsg" role="status"></div>`
+      : `<p style="font-size:14px"><a href="/account.html" style="color:var(--primary);font-weight:600">Sign in</a> to leave a review. Your username is shown with it.</p>`}
+    <hr class="rule">
+    <div class="tools"><button class="iconBtn" type="button" id="searchBtn" aria-label="Search reviews">🔍</button><input id="search" type="search" placeholder="Search reviews" aria-label="Search reviews">
+      ${[['relevant','Most relevant'],['newest','Newest'],['highest','Highest'],['lowest','Lowest']].map(([k, l]) => `<button type="button" class="btn sortBtn ${k === sortMode ? 'sel' : ''}" data-k="${k}">${l}</button>`).join('')}</div>
+    <div id="rlist">${reviewListHtml()}</div>`;
+}
+function wireReviews(){
+  document.querySelectorAll('.sortBtn').forEach(b => b.addEventListener('click', () => {
+    sortMode = b.dataset.k;
+    document.querySelectorAll('.sortBtn').forEach(x => x.classList.toggle('sel', x === b));
+    $('rlist').innerHTML = reviewListHtml();
+  }));
+  $('searchBtn').addEventListener('click', () => { const s = $('search'); s.style.display = s.style.display === 'block' ? 'none' : 'block'; if (s.style.display === 'block') s.focus(); });
+  $('search').addEventListener('input', e => { query = e.target.value; $('rlist').innerHTML = reviewListHtml(); });
+  if (!me) return;
+  document.querySelectorAll('.pick').forEach(b => b.addEventListener('click', () => {
+    pickRating = Number(b.dataset.n);
+    document.querySelectorAll('.pick').forEach(x => x.classList.toggle('on', Number(x.dataset.n) <= pickRating));
+  }));
+  $('submitReview').addEventListener('click', async () => {
+    const msg = $('rmsg'), comment = $('cmt').value.trim();
+    if (!pickRating){ msg.textContent = 'Pick a star rating first.'; return; }
+    if (!comment){ msg.textContent = 'Write a short comment first.'; return; }
+    msg.textContent = 'Submitting...';
+    const res = await fetch(`/api/businesses/${bizId}/reviews`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': token }, body: JSON.stringify({ rating: pickRating, comment }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok){ msg.textContent = data.error || 'Could not submit review.'; return; }
+    biz.reviews = [data.review, ...(biz.reviews || [])];
+    pickRating = 0; render();
+  });
+}
+
+$('lightbox').addEventListener('click', () => $('lightbox').classList.remove('show'));
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $('lightbox').classList.remove('show'); });
+window.addEventListener('hashchange', render);
+
+(async function init(){
+  const [b, u] = await Promise.all([
+    fetch('/api/businesses/' + bizId).then(r => r.ok ? r.json() : null).catch(() => null),
+    token ? fetch('/api/me', { headers: { 'x-auth-token': token } }).then(r => r.ok ? r.json() : null).catch(() => null) : null
+  ]);
+  if (!b){ $('main').innerHTML = '<h1 class="title">Listing not found</h1><p class="desc"><a href="/">Back to TT Discover</a></p>'; return; }
+  biz = b; me = u;
+  document.title = biz.name + ' — TT Discover';
+  render();
+})();
+</script>
+</body>
+</html>
