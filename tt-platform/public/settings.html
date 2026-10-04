@@ -103,6 +103,9 @@
   .miRow input { padding: 8px 10px; font-size: 14px; }
   .miRow .rmItem { margin: 0; padding: 0; background: var(--active); color: var(--text); width: 34px; height: 100%; }
   .hlName { margin-top: 6px; padding: 7px 10px; font-size: 13px; }
+  .designCard { display: flex; gap: 12px; align-items: center; width: 100%; text-align: left; margin: 0 0 8px; padding: 12px; border-radius: 10px; background: var(--card); color: var(--text); border: 2px solid var(--input-border); font-weight: 400; }
+  .designCard.on { border-color: #e0562f; }
+  .designCard .sw { width: 44px; height: 44px; border-radius: 8px; flex-shrink: 0; }
   .viewLink { display: inline-block; margin-top: 10px; font-size: 13px; color: #e0562f; text-decoration: none; font-weight: 600; }
   .savebar { margin-top: 28px; display: flex; align-items: center; gap: 14px; }
   .msg { font-size: 13px; color: #e0562f; }
@@ -195,6 +198,14 @@
     <div class="panel" data-field="hours"><label>Date &amp; time open</label><div id="hoursBox"></div><div class="hint" id="hoursNote"></div></div>
     <div class="panel" data-field="contact"><label for="f-phone">Business phone</label><input type="text" id="f-phone" maxlength="40"><label for="f-email">Business email</label><input type="text" id="f-email" maxlength="150"></div>
 
+    <div class="panel" data-field="designs">
+      <p class="hint" style="margin:0 0 12px;">Pick how your business page looks. Your page switches to it as soon as you save.</p>
+      <div id="designCards"></div>
+      <p class="hint">More designs are coming soon.</p>
+      <p style="margin-top:14px;"><a class="viewLink" id="viewItLink" href="#" target="_blank" rel="noopener">View it ↗</a></p>
+      <div class="hint">Opens your live page. Save first to see changes.</div>
+    </div>
+
     <div class="panel" data-field="facebook"><label for="f-facebook">Facebook</label><input type="url" id="f-facebook" placeholder="https://facebook.com/..."></div>
     <div class="panel" data-field="instagram"><label for="f-instagram">Instagram</label><input type="url" id="f-instagram" placeholder="https://instagram.com/..."></div>
     <div class="panel" data-field="website"><label for="f-website">Website</label><input type="url" id="f-website" placeholder="https://..."></div>
@@ -248,6 +259,7 @@ const SECTIONS = [
   { id: 'about', label: 'About', title: 'About', subs: [['about','About']] },
   { id: 'location', label: 'Location', title: 'Location', subs: [['address','Address'],['hours','Hours'],['contact','Phone & Email']] },
   { id: 'social', label: 'Social Media Links', title: 'Social Media Links', subs: [['facebook','Facebook'],['instagram','Instagram'],['website','Website']] },
+  { id: 'designs', label: 'Business Designs', title: 'Business Designs', subs: [['designs','Business Designs']] },
   { sep: true },
   { id: 'collab', label: 'Collaborators', title: 'Collaborators', ownerOnly: true, noSave: true, subs: [['collab','Collaborators']], load: () => renderCollab() },
   { id: 'staff', label: 'Staff', title: 'Staff', ownerOnly: true, noSave: true, subs: [['staff','Staff']], load: () => renderStaff() },
@@ -285,11 +297,11 @@ function selectBiz(id){
   $('bizSwitch').value = id;
   state = {
     imageUrl: biz.imageUrl || '', photos: [...(biz.photos || [])], menu: [...(biz.menuPhotos || [])], highlights: [...(biz.highlights || [])],
-    hiring: !!biz.hiring, logoUrl: biz.logoUrl || '',
+    template: biz.template || 'food', hiring: !!biz.hiring, logoUrl: biz.logoUrl || '',
     menuItems: (biz.menuItems || []).map(i => ({ ...i })), highlightNames: [...(biz.highlightNames || [])]
   };
   hoursTouched = false;
-  $('viewPage').href = '/biz/' + biz._id;
+  $('viewPage').href = '/biz/' + biz._id; $('viewItLink').href = '/biz/' + biz._id; paintDesigns();
   $('f-tagline').value = biz.tagline || '';
   $('f-name').value = biz.name || ''; $('f-category').value = biz.category || '';
   $('f-description').value = biz.description || '';
@@ -302,6 +314,11 @@ function selectBiz(id){
   $('msg').textContent = '';
 }
 
+const DESIGNS = [{ id: 'food', name: 'Food', blurb: 'Blue sidebar with Menu, Highlights, Reviews and Photos pages. Great for restaurants, bakeries and food trucks.', swatch: '#23659b' }];
+function paintDesigns(){
+  $('designCards').innerHTML = DESIGNS.map(d => `<button type="button" class="designCard${d.id === state.template ? ' on' : ''}" data-id="${d.id}" aria-pressed="${d.id === state.template}"><span class="sw" style="background:${d.swatch}"></span><span><b>${d.name}</b>${d.id === state.template ? ' ✓' : ''}<br><span style="font-size:12px;color:var(--muted)">${d.blurb}</span></span></button>`).join('');
+  document.querySelectorAll('.designCard').forEach(b => b.addEventListener('click', () => { state.template = b.dataset.id; paintDesigns(); }));
+}
 function paintHeader(){
   $('bizName').textContent = $('f-name').value || biz.name;
   $('bizEmail').textContent = biz.email || me.email;
@@ -449,7 +466,7 @@ $('saveBtn').addEventListener('click', async () => {
     name: $('f-name').value, category: $('f-category').value, description: $('f-description').value,
     address: $('f-address').value, area: $('f-area').value, phone: $('f-phone').value, email: $('f-email').value,
     imageUrl: state.imageUrl, photos: state.photos, menuPhotos: state.menu, highlights: state.highlights, about, social,
-    tagline: $('f-tagline').value, logoUrl: state.logoUrl, highlightNames: state.highlightNames.slice(0, state.highlights.length),
+    template: state.template, tagline: $('f-tagline').value, logoUrl: state.logoUrl, highlightNames: state.highlightNames.slice(0, state.highlights.length),
     menuItems: state.menuItems.filter(i => i.name.trim())
   };
   if (!body.name.trim()){ $('msg').textContent = 'Business name is required.'; return; }

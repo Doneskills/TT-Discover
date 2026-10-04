@@ -20,6 +20,8 @@
   button, input, textarea { font-family: inherit; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+  #previewBar { background: #232323; color: #fff; padding: 10px 16px; font-size: 14px; text-align: center; display: none; }
+  #previewBar.show { display: block; }
   .shell { display: grid; grid-template-columns: 230px minmax(0, 1fr); min-height: 100vh; }
   .side { background: var(--primary); color: #f2f0eb; padding: 28px 18px; position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; align-items: center; text-align: center; }
   .logo { width: 84px; height: 84px; border-radius: 50%; background: #f2f0eb; border: 3px solid var(--accent); overflow: hidden; display: flex; align-items: center; justify-content: center; font-family: var(--head); font-size: 34px; color: var(--primary); flex-shrink: 0; }
@@ -101,6 +103,7 @@
 </style>
 </head>
 <body>
+<div id="previewBar" role="status">Preview — this is how your page will look. Only you can see this. Close this tab to go back and change anything.</div>
 <div class="shell">
   <aside class="side">
     <div class="logo" id="logo"></div>
@@ -116,6 +119,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
+const previewMode = new URLSearchParams(location.search).get('preview') === '1';
 const bizId = location.pathname.split('/').filter(Boolean).pop();
 const token = localStorage.getItem('ttp_token') || '';
 let biz = null, me = null, sortMode = 'relevant', query = '', pickRating = 0;
@@ -300,6 +304,16 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') $('lightbox'
 window.addEventListener('hashchange', render);
 
 (async function init(){
+  if (previewMode){
+    try { biz = JSON.parse(localStorage.getItem('ttp_preview_draft') || 'null'); } catch (e) { biz = null; }
+    if (!biz){ $('main').innerHTML = '<h1 class="title">Nothing to preview</h1><p class="desc">Go back to Business Studio and click View it again.</p>'; return; }
+    biz.name = biz.name || 'Your business name'; biz.reviews = biz.reviews || [];
+    $('previewBar').classList.add('show');
+    document.title = 'Preview — ' + biz.name;
+    document.body.dataset.template = biz.template || 'food';
+    render();
+    return;
+  }
   const [b, u] = await Promise.all([
     fetch('/api/businesses/' + bizId).then(r => r.ok ? r.json() : null).catch(() => null),
     token ? fetch('/api/me', { headers: { 'x-auth-token': token } }).then(r => r.ok ? r.json() : null).catch(() => null) : null
@@ -307,6 +321,7 @@ window.addEventListener('hashchange', render);
   if (!b){ $('main').innerHTML = '<h1 class="title">Listing not found</h1><p class="desc"><a href="/">Back to TT Discover</a></p>'; return; }
   biz = b; me = u;
   document.title = biz.name + ' — TT Discover';
+  document.body.dataset.template = biz.template || 'food';
   render();
 })();
 </script>

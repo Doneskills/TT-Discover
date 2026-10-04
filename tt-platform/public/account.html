@@ -405,6 +405,7 @@
           <button type="button" class="studioNavItem" data-group="about">About</button>
           <button type="button" class="studioNavItem" data-group="locationinfo">Location</button>
           <button type="button" class="studioNavItem" data-group="social">Social Media Links</button>
+          <button type="button" class="studioNavItem" data-group="designs">Business Designs</button>
         </nav>
         <button type="button" id="studioHiringToggle"><span>Hiring Now</span><span class="hiringDot"></span></button>
         <a href="#" id="logoutBtn" class="studioSidebarFooterLink">Log Out</a>
@@ -498,6 +499,13 @@
             <input type="text" id="bSocialInstagram" placeholder="https://instagram.com/...">
             <label>Website / Other</label>
             <input type="text" id="bSocialWebsite" placeholder="https://...">
+          </div>
+          <div class="studioField" data-group="designs" data-field="designs">
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Pick how your business page looks. You can change it any time in Settings.</p>
+            <div id="designCards"></div>
+            <p style="font-size:12px;color:var(--text-muted);margin-top:10px;">More designs are coming soon.</p>
+            <button type="button" id="viewItBtn" style="margin-top:14px;background:var(--soft-bg);color:var(--text);">View it</button>
+            <div class="hint" style="font-size:12px;color:var(--text-muted);margin-top:6px;">Opens a preview of your page with everything you've added so far. Come back here to change or remove anything.</div>
           </div>
         </div>
 
@@ -649,6 +657,34 @@ document.getElementById('toolBizSelect').addEventListener('change', (e) => {
 });
 document.getElementById('studioTopAvatar').addEventListener('click', () => {
   window.location.href = '/settings.html';
+});
+
+// ---------------- Business Designs picker + "View it" preview ----------------
+const DESIGNS = [{ id: 'food', name: 'Food', blurb: 'Blue sidebar with Menu, Highlights, Reviews and Photos pages. Great for restaurants, bakeries and food trucks.', swatch: '#23659b' }];
+let chosenDesign = 'food';
+function paintDesignCards(){
+  document.getElementById('designCards').innerHTML = DESIGNS.map(d => `
+    <button type="button" class="designCard" data-id="${d.id}" aria-pressed="${d.id === chosenDesign}" style="display:flex;gap:12px;align-items:center;width:100%;text-align:left;margin:0 0 8px;padding:12px;border-radius:10px;background:var(--card-bg);color:var(--text);border:2px solid ${d.id === chosenDesign ? '#e0562f' : 'var(--input-border)'};">
+      <span style="width:44px;height:44px;border-radius:8px;background:${d.swatch};flex-shrink:0;"></span>
+      <span><b>${d.name}</b>${d.id === chosenDesign ? ' ✓' : ''}<br><span style="font-size:12px;color:var(--text-muted);font-weight:400;">${d.blurb}</span></span>
+    </button>`).join('');
+  document.querySelectorAll('.designCard').forEach(b => b.addEventListener('click', () => { chosenDesign = b.dataset.id; paintDesignCards(); }));
+}
+paintDesignCards();
+function currentDraft(){
+  const v = id => document.getElementById(id).value;
+  return {
+    name: v('bName'), category: v('bCategory'), description: v('bDescription'), address: v('bAddress'), area: v('bArea'),
+    phone: v('bPhone'), email: v('bEmail'), hours: hoursState,
+    imageUrl: photosState[0] || v('bImageUrl'), photos: photosState, menuPhotos: menuPhotosState, highlights: highlightsState,
+    social: { facebook: v('bSocialFacebook'), instagram: v('bSocialInstagram'), website: v('bSocialWebsite') },
+    template: chosenDesign, reviews: [], deals: []
+  };
+}
+document.getElementById('viewItBtn').addEventListener('click', () => {
+  try { localStorage.setItem('ttp_preview_draft', JSON.stringify(currentDraft())); }
+  catch (e) { document.getElementById('addMsg').textContent = 'Your photos are too big to preview. Try fewer or smaller photos.'; return; }
+  window.open('/biz.html?preview=1', '_blank');
 });
 
 // ---------------- Dismissible "edit in Settings" note ----------------
@@ -951,7 +987,7 @@ const STUDIO_FIELD_LABELS = {
   overview: 'Overview', menu: 'Menu',
   about: 'About',
   location: 'Location', hours: 'Date & Time Open', contact: 'Phone & Email',
-  social: 'Social Media Links'
+  social: 'Social Media Links', designs: 'Business Designs'
 };
 function showStudioGroup(group){
   document.querySelectorAll('.studioNavItem').forEach(b => b.classList.toggle('active', b.dataset.group === group));
@@ -1545,6 +1581,7 @@ function populateStudioForm(biz){
   currentBizId = biz._id;
   currentBizIsOwner = (biz.ownerId === myUserId);
   updateHiringToggleUI(!!biz.hiring);
+  chosenDesign = biz.template || 'food'; paintDesignCards();
   document.getElementById('bName').value = biz.name || '';
   document.getElementById('bCategory').value = biz.category || '';
   document.getElementById('bDescription').value = biz.description || '';
@@ -1579,6 +1616,7 @@ function populateStudioForm(biz){
 function clearStudioForm(){
   currentBizId = null;
   currentBizIsOwner = true;
+  chosenDesign = 'food'; paintDesignCards();
   updateHiringToggleUI(false);
   ['bName','bCategory','bDescription','bAddress','bArea','bPhone','bEmail','bImageUrl',
    'aboutAccessibility','aboutServiceOptions','aboutPopularFor','aboutOfferings','aboutDiningOptions',
@@ -1635,6 +1673,7 @@ document.getElementById('addBizBtn').addEventListener('click', async () => {
     photos: photosState,
     menuPhotos: menuPhotosState,
     highlights: highlightsState,
+    template: chosenDesign,
     about: {
       accessibility: document.getElementById('aboutAccessibility').value,
       serviceOptions: document.getElementById('aboutServiceOptions').value,

@@ -589,6 +589,7 @@ app.get('/api/my/businesses', requireUser, async (req, res) => {
 
 const BUSINESS_LIMIT = { free: 1, premium: 3 };
 
+const TEMPLATES = ['food'];
 app.post('/api/my/businesses', requireUser, requireBusinessAccount, async (req, res) => {
   if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
   try {
@@ -615,6 +616,8 @@ app.post('/api/my/businesses', requireUser, requireBusinessAccount, async (req, 
       imageUrl: String(b.imageUrl || '').slice(0, 400000),
       photos: sanitizePhotoArray(b.photos),
       menuPhotos: sanitizePhotoArray(b.menuPhotos),
+      highlights: sanitizePhotoArray(b.highlights),
+      template: TEMPLATES.includes(b.template) ? b.template : 'food',
       about: sanitizeAbout(b.about),
       social: sanitizeSocial(b.social),
       hiring: !!b.hiring,
@@ -681,6 +684,7 @@ app.put('/api/my/businesses/:id', requireUser, requireBusinessAccount, async (re
     if (Array.isArray(b.menuPhotos)) update.menuPhotos = sanitizePhotoArray(b.menuPhotos);
     if (Array.isArray(b.highlights)) update.highlights = sanitizePhotoArray(b.highlights);
     if (typeof b.hiring === 'boolean') update.hiring = b.hiring;
+    if (TEMPLATES.includes(b.template)) update.template = b.template;
     if (typeof b.tagline === 'string') update.tagline = b.tagline.trim().slice(0, 60);
     if (typeof b.logoUrl === 'string') update.logoUrl = b.logoUrl.slice(0, 400000);
     if (Array.isArray(b.highlightNames)) update.highlightNames = b.highlightNames.slice(0, 10).map(n => String(n || '').trim().slice(0, 40));
