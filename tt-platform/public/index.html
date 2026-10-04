@@ -141,10 +141,13 @@
   }
   #detailMapWrap { height: 200px; margin-top: -52px; overflow: hidden; background: var(--placeholder-bg); }
   #detailMapWrap iframe { width: 100%; height: 100%; border: 0; display: block; }
-  #detailContent { max-width: 1000px; margin: 0 auto; padding: 20px 20px 60px; }
+  #detailContent { max-width: none; margin: 0; padding: 0; }
   #detailTabPanel.narrow { max-width: 600px; margin: 0 auto; }
   #detailContent .detailTabRow { max-width: 600px; margin-left: auto; margin-right: auto; }
-  #designFrame { width: 100%; border: 0; display: block; min-height: 480px; border-radius: 12px; overflow: hidden; }
+  #designFrame { width: 100%; border: 0; display: block; min-height: 400px; }
+  #photoLightbox { position: fixed; inset: 0; background: rgba(0,0,0,.88); z-index: 80; display: none; align-items: center; justify-content: center; padding: 16px; }
+  #photoLightbox.show { display: flex; }
+  #photoLightbox img { max-width: 100%; max-height: 100%; border-radius: 10px; }
   #detailContent h2 { font-size: 22px; margin-bottom: 4px; }
   #detailContent .meta { color: var(--text-muted); font-size: 13px; margin-bottom: 10px; }
   #detailContent .desc { font-size: 14px; line-height: 1.5; margin-bottom: 14px; }
@@ -245,6 +248,7 @@
     <iframe id="detailMapFrame" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
   </div>
   <div id="detailContent"></div>
+<div id="photoLightbox" role="dialog" aria-label="Photo"><img alt=""></div>
 </div>
 
 <div id="aboutModal">
@@ -474,138 +478,17 @@ function openDetail(id){
     `${biz.address || biz.name}, ${biz.area || 'Port of Spain'}, Trinidad and Tobago`
   );
   document.getElementById('detailMapFrame').src = `https://www.google.com/maps?q=${mapQuery}&output=embed`;
-  renderDetailTabs(biz, 'overview');
+  renderDetailTabs(biz);
   document.getElementById('detailModal').classList.add('open');
   document.getElementById('detailModal').scrollTop = 0;
   document.body.style.overflow = 'hidden';
   fetch(`/api/businesses/${id}/view`, { method: 'POST' }).catch(() => {});
 }
 
-function renderDetailTabs(biz, activeTab){
-  const deals = activeDeals(biz);
-  const isOwnerView = !!(currentUserId && biz.ownerId === currentUserId);
-  const tabs = ['Overview', 'Posts', 'Jobs', 'About'].concat(isOwnerView ? ['Review'] : []);
-  const tabsHtml = tabs.map(t => {
-    const key = t.toLowerCase();
-    return `<button class="detailTabBtn ${key === activeTab ? 'active' : ''}" data-tab="${key}">${t}</button>`;
-  }).join('');
-
-  let panelHtml = '';
-  const rating = ratingSummary(biz);
-  if (activeTab === 'overview'){
-    panelHtml = `<iframe id="designFrame" src="/biz/${biz._id}?embed=1" title="${escapeHtml(biz.name)} page" scrolling="no"></iframe>`;
-  } else if (activeTab === 'posts'){
-    const posts = biz.posts || [];
-    panelHtml = posts.length
-      ? posts.map(p => `
-          <div class="postItem">
-            <b style="font-size:14px;">${escapeHtml(p.title)}</b>
-            <div class="postDate">${new Date(p.createdAt).toLocaleDateString()}</div>
-            ${p.content ? `<div class="desc">${escapeHtml(p.content)}</div>` : ''}
-            ${p.imageUrl ? `<div class="overviewPhoto"><img src="${p.imageUrl}"></div>` : ''}
-          </div>
-        `).join('')
-      : `<div class="emptyState">No posts yet — check back soon!</div>`;
-  } else if (activeTab === 'jobs'){
-    const jobs = biz.jobs || [];
-    panelHtml = jobs.length
-      ? jobs.map(j => `
-          <div class="postItem">
-            <b style="font-size:14px;">💼 ${escapeHtml(j.title)}</b>
-            ${j.employmentType ? ` · <span class="postDate">${escapeHtml(j.employmentType)}</span>` : ''}
-            <div class="postDate">
-              ${j.location ? escapeHtml(j.location) + ' · ' : ''}Posted ${new Date(j.createdAt).toLocaleDateString()}
-              ${j.closingDate ? ' · Closes ' + new Date(j.closingDate).toLocaleDateString() : ''}
-            </div>
-            ${j.salary ? `<div class="row"><b>Salary:</b> ${escapeHtml(j.salary)}</div>` : ''}
-            ${j.description ? `<div class="desc">${escapeHtml(j.description)}</div>` : ''}
-            ${j.requirements ? `<div class="row"><b>Requirements:</b> ${escapeHtml(j.requirements)}</div>` : ''}
-          </div>
-        `).join('')
-      : `<div class="emptyState">No job openings right now — check back soon!</div>`;
-  } else if (activeTab === 'menu'){
-    const menuPhotos = biz.menuPhotos || [];
-    const highlights = biz.highlights || [];
-    panelHtml = `
-      <h3 style="font-size:14px;margin-bottom:8px;">🍽️ Menu</h3>
-      ${menuPhotos.length
-        ? `<div class="menuPhotoGrid">${menuPhotos.map(u => `<img src="${u}">`).join('')}</div>`
-        : `<div class="emptyState">This business hasn't added their menu yet.</div>`}
-      <h3 style="font-size:14px;margin:18px 0 8px;">✨ Highlights</h3>
-      ${highlights.length
-        ? `<div class="menuPhotoGrid">${highlights.map(u => `<img src="${u}">`).join('')}</div>`
-        : `<div class="emptyState">No highlight photos yet.</div>`}
-    `;
-  } else if (activeTab === 'review'){
-    const reviews = biz.reviews || [];
-    const isOwner = !!(currentUserId && biz.ownerId === currentUserId);
-    panelHtml = `
-      <div class="reviewSummary">
-        ${rating.count
-          ? `<span class="starsRow big">${starsHtml(rating.avg)}</span> <b>${rating.avg.toFixed(1)}</b> out of 5 · ${rating.count} review${rating.count === 1 ? '' : 's'}`
-          : 'No reviews yet — be the first!'}
-      </div>
-      <div id="reviewList">
-        ${reviews.length ? reviews.map(r => reviewItemHtml(r, isOwner)).join('') : ''}
-      </div>
-      <h3 style="font-size:14px;margin:18px 0 8px;">Leave a Review</h3>
-      ${window.__me ? `
-      <div class="reviewForm">
-        <div class="hint" style="font-size:12px;color:var(--text-muted2);margin-bottom:10px;">
-          Posting as <b>${window.__me.username ? '@' + escapeHtml(window.__me.username) : 'Anonymous'}</b>${window.__me.username ? '' : ' — <a href="/profile.html" style="color:#e0562f;">add a username in your profile</a> to show your name'}
-        </div>
-        <label class="reviewFormLabel">Rating</label>
-        <div id="starPicker" class="starPicker" data-value="0">
-          ${[1,2,3,4,5].map(n => `<span class="starPickerStar" data-star="${n}">☆</span>`).join('')}
-        </div>
-        <label class="reviewFormLabel" style="margin-top:10px;">Comment</label>
-        <textarea id="reviewCommentInput" placeholder="Share your experience..." class="reviewFormInput" style="min-height:70px;resize:vertical;"></textarea>
-        <button id="submitReviewBtn" style="margin-top:10px;">Submit Review</button>
-        <div class="msg" id="reviewMsg"></div>
-      </div>` : `
-      <p style="font-size:14px;color:var(--text-muted2);">
-        <a href="/account.html" style="color:#e0562f;font-weight:700;">Sign in</a> to leave a review — your username is shown with it.
-      </p>`}
-    `;
-  } else if (activeTab === 'about'){
-    const about = biz.about || {};
-    const social = biz.social || {};
-    const ABOUT_LABELS = {
-      accessibility: 'Accessibility', serviceOptions: 'Service Options', popularFor: 'Popular For',
-      offerings: 'Offerings', diningOptions: 'Dining Options', atmosphere: 'Atmosphere',
-      crowd: 'Crowd', payments: 'Payments', children: 'Children', parking: 'Parking'
-    };
-    const aboutRows = Object.keys(ABOUT_LABELS)
-      .filter(k => about[k])
-      .map(k => `<div class="row"><b>${ABOUT_LABELS[k]}:</b> ${escapeHtml(about[k])}</div>`)
-      .join('');
-    const socialLinks = [
-      social.facebook ? `<a href="${escapeHtml(social.facebook)}" target="_blank" rel="noopener">Facebook</a>` : '',
-      social.instagram ? `<a href="${escapeHtml(social.instagram)}" target="_blank" rel="noopener">Instagram</a>` : '',
-      social.website ? `<a href="${escapeHtml(social.website)}" target="_blank" rel="noopener">Website</a>` : ''
-    ].filter(Boolean).join(' · ');
-    panelHtml = `
-      <h2>${escapeHtml(biz.name)}</h2>
-      <div class="desc">${escapeHtml(biz.description)}</div>
-      ${biz.address ? `<div class="row"><b>Address:</b> ${escapeHtml(biz.address)}</div>` : ''}
-      ${biz.phone ? `<div class="row"><b>Phone:</b> ${escapeHtml(biz.phone)}</div>` : ''}
-      ${biz.email ? `<div class="row"><b>Email:</b> ${escapeHtml(biz.email)}</div>` : ''}
-      ${biz.hours ? `<div class="row"><b>Hours:</b> ${escapeHtml(formatHours(biz.hours))}</div>` : ''}
-      <div class="row"><b>Category:</b> ${escapeHtml(biz.category)}</div>
-      <div class="row"><b>Area:</b> ${escapeHtml(biz.area)}</div>
-      ${socialLinks ? `<div class="row" style="margin-top:10px;"><b>Find us:</b> ${socialLinks}</div>` : ''}
-      ${aboutRows ? `<div class="aboutRowsWrap">${aboutRows}</div>` : ''}
-    `;
-  }
-
-  document.getElementById('detailContent').innerHTML = `
-    <div class="detailTabRow">${tabsHtml}</div>
-    <div id="detailTabPanel" class="${activeTab === 'overview' ? '' : 'narrow'}">${panelHtml}</div>
-  `;
-  document.querySelectorAll('.detailTabBtn').forEach(btn => {
-    btn.addEventListener('click', () => renderDetailTabs(biz, btn.dataset.tab));
-  });
-  if (activeTab === 'review') wireReviewTab(biz);
+function renderDetailTabs(biz){
+  const minh = Math.max(400, window.innerHeight - 200);
+  document.getElementById('detailContent').innerHTML =
+    `<iframe id="designFrame" src="/biz/${biz._id}?embed=1&minh=${minh}" title="${escapeHtml(biz.name)} page" scrolling="no"></iframe>`;
 }
 
 window.addEventListener('message', (e) => {
@@ -613,6 +496,7 @@ window.addEventListener('message', (e) => {
   if (!f || e.source !== f.contentWindow || !e.data) return;
   if (e.data.ttEmbedHeight) f.style.height = e.data.ttEmbedHeight + 'px';
   if (e.data.ttEmbedTop) f.scrollIntoView({ block: 'start' });
+  if (e.data.ttOpenPhoto){ const lb = document.getElementById('photoLightbox'); lb.querySelector('img').src = e.data.ttOpenPhoto; lb.classList.add('show'); }
 });
 
 function wireReviewTab(biz){
@@ -701,6 +585,7 @@ document.getElementById('searchInput').addEventListener('input', (e) => {
 
 loadBusinesses();
 checkSignInStatus();
+document.getElementById('photoLightbox').addEventListener('click', () => document.getElementById('photoLightbox').classList.remove('show'));
 </script>
 </body>
 </html>

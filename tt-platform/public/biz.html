@@ -24,7 +24,12 @@
   .embed .shell { min-height: 0; }
   .embed .side { position: static; height: auto; }
   .embed .back { display: none; }
-  .embed .tile { cursor: default; }
+  .post { padding: 14px 0; border-bottom: 1px solid #d9d4c7; }
+  .post .pd { font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
+  .post img { max-width: 100%; border-radius: 12px; margin-top: 8px; }
+  .aboutRow { font-size: 14px; margin: 5px 0; } .aboutRow b { color: var(--primary); }
+  .replyBox { margin-top: 8px; } .replyBox textarea { width: 100%; max-width: 480px; min-height: 52px; padding: 8px 10px; border-radius: 8px; border: 1px solid #b9b2a1; font-size: 13px; }
+  .replyBox .btn { padding: 6px 14px; font-size: 13px; margin-top: 6px; }
   #previewBar { background: #232323; color: #fff; padding: 10px 16px; font-size: 14px; text-align: center; display: none; }
   #previewBar.show { display: block; }
   .shell { display: grid; grid-template-columns: 230px minmax(0, 1fr); min-height: 100vh; }
@@ -92,13 +97,14 @@
   #lightbox img { max-width: 100%; max-height: 100%; border-radius: 10px; }
 
   @media (max-width: 760px) {
-    .shell { grid-template-columns: 1fr; }
+    .shell { grid-template-columns: minmax(0, 1fr); }
+    .side { min-width: 0; }
     .side { position: static; height: auto; flex-direction: row; flex-wrap: wrap; justify-content: flex-start; align-items: center; text-align: left; padding: 12px 14px; gap: 10px; }
     .logo { width: 44px; height: 44px; font-size: 20px; border-width: 2px; }
     .sideName { margin: 0; font-size: 17px; flex: 1; }
     .sideBig, .back { display: none; }
     .nav { flex-direction: row; margin: 0; width: 100%; overflow-x: auto; }
-    .nav a { padding: 8px 14px; white-space: nowrap; }
+    .nav a { padding: 8px 6px; white-space: nowrap; flex: 1 1 auto; text-align: center; font-size: 14px; }
     main { padding: 22px 16px 60px; }
     h1.title { font-size: 28px; }
     .grid, .grid.four { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
@@ -126,13 +132,19 @@ const $ = id => document.getElementById(id);
 const esc = s => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
 const embed = new URLSearchParams(location.search).get('embed') === '1';
 if (embed) document.documentElement.classList.add('embed');
+const embedMinH = Number(new URLSearchParams(location.search).get('minh')) || 0;
 const previewMode = new URLSearchParams(location.search).get('preview') === '1';
 const bizId = location.pathname.split('/').filter(Boolean).pop();
 const token = localStorage.getItem('ttp_token') || '';
 let biz = null, me = null, sortMode = 'relevant', query = '', pickRating = 0;
 
 const DAYS = ['sun','mon','tue','wed','thu','fri','sat'];
-const PAGES = [['home','Home'],['menu','Menu'],['reviews','Reviews'],['photos','Photos']];
+function pages(){
+  const l = [['home','Home'],['menu','Menu'],['reviews','Reviews'],['photos','Photos']];
+  if (biz && (biz.posts || []).length) l.push(['posts','Posts']);
+  if (biz && (biz.jobs || []).length) l.push(['jobs','Jobs']);
+  return l;
+}
 
 function ratingOf(b){
   const rs = b.reviews || [];
@@ -168,14 +180,14 @@ function hoursLines(h){
   return Object.keys(names).filter(k => h[k]).map(k => `${names[k]}: ${h[k].closed ? 'Closed' : fmt12(h[k].open) + ' – ' + fmt12(h[k].close)}`).join(' · ');
 }
 
-function route(){ const p = (location.hash || '#home').slice(1); return PAGES.some(x => x[0] === p) ? p : 'home'; }
+function route(){ const p = (location.hash || '#home').slice(1); return pages().some(x => x[0] === p) ? p : 'home'; }
 
 function paintShell(){
   $('logo').innerHTML = biz.logoUrl ? `<img src="${biz.logoUrl}" alt="">` : esc((biz.name || '?')[0].toUpperCase());
   $('sideName').textContent = biz.name;
   $('sideBig').textContent = biz.tagline || 'Menu';
   const cur = route();
-  $('nav').innerHTML = PAGES.map(([k, l]) => `<a href="#${k}" class="${k === cur ? 'active' : ''}" ${k === cur ? 'aria-current="page"' : ''}>${l}</a>`).join('');
+  $('nav').innerHTML = pages().map(([k, l]) => `<a href="#${k}" class="${k === cur ? 'active' : ''}" ${k === cur ? 'aria-current="page"' : ''}>${l}</a>`).join('');
 }
 
 function sendHeight(){
@@ -187,7 +199,7 @@ function render(){
   paintShell();
   const p = route();
   const m = $('main');
-  m.innerHTML = p === 'home' ? homeHtml() : p === 'menu' ? menuHtml() : p === 'reviews' ? reviewsHtml() : photosHtml();
+  m.innerHTML = p === 'home' ? homeHtml() : p === 'menu' ? menuHtml() : p === 'reviews' ? reviewsHtml() : p === 'posts' ? postsHtml() : p === 'jobs' ? jobsHtml() : photosHtml();
   window.scrollTo(0, 0);
   if (embed){
     m.querySelectorAll('a[href^="/"]').forEach(a => a.target = '_top');
@@ -196,7 +208,10 @@ function render(){
   }
   firstRender = false;
   if (p === 'reviews') wireReviews();
-  if (!embed) m.querySelectorAll('.tile img').forEach(i => i.addEventListener('click', () => { $('lightbox').querySelector('img').src = i.src; $('lightbox').classList.add('show'); }));
+  m.querySelectorAll('.tile img').forEach(i => i.addEventListener('click', () => {
+    if (embed && window.parent !== window){ window.parent.postMessage({ ttOpenPhoto: i.src }, location.origin); return; }
+    $('lightbox').querySelector('img').src = i.src; $('lightbox').classList.add('show');
+  }));
 }
 
 function tiles(urls, cls){ return urls.length ? `<div class="grid ${cls || ''}">${urls.map(u => `<div class="tile"><img src="${u}" alt="" loading="lazy"></div>`).join('')}</div>` : ''; }
@@ -217,6 +232,7 @@ function homeHtml(){
     <hr class="rule" style="margin-top:22px">
     <h2 class="sec">Description</h2>
     <p class="desc">${esc(biz.description) || '<span class="empty">No description yet.</span>'}</p>
+    ${aboutHtml()}
     ${deals.map(d => `<div class="deal"><b>🔥 ${esc(d.title)}</b><br>${esc(d.description)}</div>`).join('')}
     ${biz.hiring ? '<div class="chips"><span class="chip">💼 Hiring now</span></div>' : ''}
     <div class="chips">${['facebook','instagram','website'].filter(k => soc[k]).map(k => `<a class="chip" href="${esc(soc[k])}" target="_blank" rel="noopener">${k[0].toUpperCase() + k.slice(1)}</a>`).join('')}</div>
@@ -226,6 +242,25 @@ function homeHtml(){
     </div>`;
 }
 
+const ABOUT_LABELS = { accessibility: 'Accessibility', serviceOptions: 'Service options', popularFor: 'Popular for', offerings: 'Offerings', diningOptions: 'Dining options', atmosphere: 'Atmosphere', crowd: 'Crowd', payments: 'Payments', children: 'Children', parking: 'Parking' };
+function aboutHtml(){
+  const a = biz.about || {};
+  const rows = Object.keys(ABOUT_LABELS).filter(k => a[k]).map(k => `<div class="aboutRow"><b>${ABOUT_LABELS[k]}:</b> ${esc(a[k])}</div>`).join('');
+  return rows ? `<h2 class="sec" style="margin-top:22px">About</h2>${rows}` : '';
+}
+function postsHtml(){
+  return `<h2 class="sec">Posts</h2><hr class="rule" style="margin-top:0">` + (biz.posts || []).slice().reverse().map(p => `
+    <div class="post"><b>${esc(p.title)}</b><div class="pd">${new Date(p.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+      ${p.content ? `<p class="desc">${esc(p.content)}</p>` : ''}${p.imageUrl ? `<img src="${p.imageUrl}" alt="">` : ''}</div>`).join('');
+}
+function jobsHtml(){
+  return `<h2 class="sec">Jobs</h2><hr class="rule" style="margin-top:0">` + (biz.jobs || []).map(j => `
+    <div class="post"><b>💼 ${esc(j.title)}</b>${j.employmentType ? ' · ' + esc(j.employmentType) : ''}
+      <div class="pd">${j.location ? esc(j.location) + ' · ' : ''}Posted ${new Date(j.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}${j.closingDate ? ' · Closes ' + new Date(j.closingDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</div>
+      ${j.salary ? `<div class="aboutRow"><b>Salary:</b> ${esc(j.salary)}</div>` : ''}
+      ${j.description ? `<p class="desc">${esc(j.description)}</p>` : ''}
+      ${j.requirements ? `<div class="aboutRow"><b>Requirements:</b> ${esc(j.requirements)}</div>` : ''}</div>`).join('');
+}
 function menuHtml(){
   const mp = biz.menuPhotos || [], hl = biz.highlights || [], names = biz.highlightNames || [];
   const sections = [];
@@ -262,6 +297,18 @@ function sortedReviews(){
   else list.sort((a, b) => (b.comment.length - a.comment.length) || (new Date(b.createdAt) - new Date(a.createdAt)));
   return list;
 }
+function isOwner(){ return !previewMode && me && biz && biz.ownerId && biz.ownerId === me.id; }
+function wireReplies(){
+  document.querySelectorAll('.replyBox').forEach(box => box.querySelector('.replyBtn').addEventListener('click', async () => {
+    const text = box.querySelector('textarea').value.trim(), msg = box.querySelector('.msg');
+    if (!text){ msg.textContent = ' Write a reply first.'; return; }
+    const res = await fetch(`/api/my/businesses/${bizId}/reviews/${box.dataset.id}/reply`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': token }, body: JSON.stringify({ text }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok){ msg.textContent = ' ' + (data.error || 'Could not save reply.'); return; }
+    const rev = (biz.reviews || []).find(x => x._id === box.dataset.id); if (rev) rev.reply = data.reply;
+    $('rlist').innerHTML = reviewListHtml(); wireReplies(); sendHeight();
+  }));
+}
 function reviewListHtml(){
   const list = sortedReviews();
   if (!list.length) return `<p class="empty">${query ? 'No reviews match your search.' : 'No reviews yet. Be the first!'}</p>`;
@@ -269,7 +316,7 @@ function reviewListHtml(){
     <div class="review"><div class="avatar">${esc((r.authorName || '?')[0].toUpperCase())}</div>
       <div style="min-width:0"><div><span class="who">${esc(r.authorName)}</span><span class="when">${new Date(r.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span></div>
         ${starsHtml(r.rating)}<p>${esc(r.comment)}</p>
-        ${r.reply ? `<div class="reply"><b>Owner reply:</b> ${esc(typeof r.reply === 'string' ? r.reply : r.reply.text)}</div>` : ''}</div></div>`).join('');
+        ${r.reply ? `<div class="reply"><b>Owner reply:</b> ${esc(typeof r.reply === 'string' ? r.reply : r.reply.text)}</div>` : (isOwner() ? `<div class="replyBox" data-id="${r._id}"><textarea placeholder="Reply as the business..." maxlength="500"></textarea><br><button type="button" class="btn replyBtn">Reply</button><span class="msg"></span></div>` : '')}</div></div>`).join('');
 }
 function reviewsHtml(){
   const r = ratingOf(biz), counts = [5,4,3,2,1].map(n => (biz.reviews || []).filter(x => x.rating === n).length);
@@ -295,10 +342,11 @@ function wireReviews(){
   document.querySelectorAll('.sortBtn').forEach(b => b.addEventListener('click', () => {
     sortMode = b.dataset.k;
     document.querySelectorAll('.sortBtn').forEach(x => x.classList.toggle('sel', x === b));
-    $('rlist').innerHTML = reviewListHtml();
+    $('rlist').innerHTML = reviewListHtml(); wireReplies();
   }));
   $('searchBtn').addEventListener('click', () => { const s = $('search'); s.style.display = s.style.display === 'block' ? 'none' : 'block'; if (s.style.display === 'block') s.focus(); });
-  $('search').addEventListener('input', e => { query = e.target.value; $('rlist').innerHTML = reviewListHtml(); });
+  $('search').addEventListener('input', e => { query = e.target.value; $('rlist').innerHTML = reviewListHtml(); wireReplies(); });
+  wireReplies();
   if (!me) return;
   document.querySelectorAll('.pick').forEach(b => b.addEventListener('click', () => {
     pickRating = Number(b.dataset.n);
@@ -320,6 +368,7 @@ function wireReviews(){
 $('lightbox').addEventListener('click', () => $('lightbox').classList.remove('show'));
 document.addEventListener('keydown', e => { if (e.key === 'Escape') $('lightbox').classList.remove('show'); });
 window.addEventListener('hashchange', render);
+if (embed && embedMinH) document.querySelector('.shell').style.minHeight = embedMinH + 'px';
 if (embed && window.ResizeObserver) new ResizeObserver(sendHeight).observe(document.querySelector('.shell'));
 
 (async function init(){
