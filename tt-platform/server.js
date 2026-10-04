@@ -335,7 +335,7 @@ app.get('/biz/:id', async (req, res) => {
   if (!biz) return res.status(404).send('<h1>Listing not found</h1><a href="/">Back to TT Discover</a>');
 
   const today = new Date().toISOString().slice(0, 10);
-  businessesCol.updateOne({ _id: biz._id }, { $inc: { [`viewsByDay.${today}`]: 1 } }).catch(() => {});
+  if (!req.query.embed) businessesCol.updateOne({ _id: biz._id }, { $inc: { [`viewsByDay.${today}`]: 1 } }).catch(() => {});
 
   const title = escapeHtml(biz.name) + ' — TT Discover';
   const desc = escapeHtml((biz.description || '').slice(0, 160));
