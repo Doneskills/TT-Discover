@@ -36,6 +36,10 @@
     position: relative;
   }
   .navBtns { position: absolute; top: 16px; right: 16px; display: flex; gap: 8px; }
+  @media (max-width: 600px) {
+    header { padding-top: 76px; }
+    header h1 { font-size: 24px; }
+  }
   .navBtn {
     width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.2);
     border: 1.5px solid rgba(255,255,255,0.6); color: #fff; font-size: 18px;

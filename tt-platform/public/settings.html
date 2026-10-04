@@ -40,7 +40,7 @@
   #notBusiness a, #noBiz a { color: #e0562f; }
 
   #app { display: none; min-height: calc(100vh - 62px); }
-  #app.show { display: grid; grid-template-columns: 280px 1fr; }
+  #app.show { display: grid; grid-template-columns: 280px minmax(0, 1fr); }
   aside { border-right: 3px solid var(--text); padding: 26px 0; }
   .bizHead { text-align: center; padding: 0 18px 18px; border-bottom: 3px solid var(--text); margin: 0 18px; }
   .bizAvatar { width: 104px; height: 104px; border-radius: 50%; background: var(--dark); color: #fff; font-size: 44px; display: flex; align-items: center; justify-content: center; overflow: hidden; margin: 0 auto 12px; }
@@ -110,7 +110,11 @@
   .savebar { margin-top: 28px; display: flex; align-items: center; gap: 14px; }
   .msg { font-size: 13px; color: #e0562f; }
   @media (max-width: 760px) {
-    #app.show { grid-template-columns: 1fr; }
+    #app.show { grid-template-columns: minmax(0, 1fr); }
+    aside { min-width: 0; }
+    .subTabs { overflow-x: auto; gap: 18px; }
+    .subTab { white-space: nowrap; flex-shrink: 0; }
+    .topRow { flex-wrap: wrap; }
     aside { border-right: none; border-bottom: 3px solid var(--text); padding: 18px 0 0; }
     nav { display: flex; overflow-x: auto; padding: 8px 10px; }
     .navItem { width: auto; white-space: nowrap; padding: 10px 14px; gap: 6px; }
