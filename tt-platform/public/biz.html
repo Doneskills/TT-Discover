@@ -5,14 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!--META-->
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
+<script>try { if (localStorage.getItem('tt_theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
+    --surface: var(--surface); --divider: var(--divider); --track: var(--track); --starOff: var(--starOff); --fieldBorder: var(--fieldBorder); --field: #ffffff;
+    --dealBg: var(--dealBg); --title: #23659b; --ok: #1a7a3c; --bad: #c40d0d;
     --primary: #23659b; --primary-soft: #3573a3; --bg: #f2f0eb; --text: #1f2a33; --muted: #5d6b76;
     --accent: #c40d0d; --star: #f5b301; --line: #23659b;
     --head: 'Oswald', 'Arial Narrow', Impact, sans-serif; --body: 'Poppins', 'Segoe UI', system-ui, sans-serif;
+  }
+  [data-theme="dark"] {
+    --bg: #16181d; --text: #e8e6e3; --muted: #a9a9a9; --surface: #2a2d34; --divider: #33363d; --track: #3a3d45;
+    --starOff: #555a63; --fieldBorder: #4a4d55; --field: #22252b; --dealBg: #3a3320; --title: #7db8e6; --ok: #4cc47c; --bad: #ff7b7b;
+    --primary: #1b4f78; --primary-soft: #2b6a9b; --line: #3a7db5;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: var(--body); background: var(--bg); color: var(--text); min-height: 100vh; }
@@ -24,11 +32,11 @@
   .embed .shell { min-height: 0; }
   .embed .side { position: static; height: auto; }
   .embed .back { display: none; }
-  .post { padding: 14px 0; border-bottom: 1px solid #d9d4c7; }
+  .post { padding: 14px 0; border-bottom: 1px solid var(--divider); }
   .post .pd { font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
   .post img { max-width: 100%; border-radius: 12px; margin-top: 8px; }
   .aboutRow { font-size: 14px; margin: 5px 0; } .aboutRow b { color: var(--primary); }
-  .replyBox { margin-top: 8px; } .replyBox textarea { width: 100%; max-width: 480px; min-height: 52px; padding: 8px 10px; border-radius: 8px; border: 1px solid #b9b2a1; font-size: 13px; }
+  .replyBox { margin-top: 8px; } .replyBox textarea { width: 100%; max-width: 480px; min-height: 52px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--fieldBorder); font-size: 13px; }
   .replyBox .btn { padding: 6px 14px; font-size: 13px; margin-top: 6px; }
   #previewBar { background: #232323; color: #fff; padding: 10px 16px; font-size: 14px; text-align: center; display: none; }
   #previewBar.show { display: block; }
@@ -42,20 +50,23 @@
   .nav a { text-decoration: none; padding: 11px 14px; border-radius: 8px; font-size: 15px; text-align: left; }
   .nav a.active { background: rgba(255,255,255,.18); font-weight: 600; }
   .nav a:hover { background: rgba(255,255,255,.1); }
+  .themeBtn { margin-top: 12px; background: rgba(255,255,255,.15); color: #fff; border: none; border-radius: 18px; padding: 7px 14px; font-size: 13px; cursor: pointer; }
+  .embed .themeBtn { display: none; }
   .back { font-size: 12px; opacity: .85; margin-top: 14px; text-decoration: none; }
 
   main { padding: 34px 40px 80px; min-width: 0; }
-  h1.title { font-family: var(--head); font-weight: 500; font-size: 36px; color: var(--primary); text-transform: uppercase; line-height: 1.1; }
-  h2.sec { font-family: var(--head); font-weight: 500; font-size: 28px; color: var(--primary); text-transform: uppercase; margin: 6px 0 12px; }
+  h1.title { font-family: var(--head); font-weight: 500; font-size: 36px; color: var(--title); text-transform: uppercase; line-height: 1.1; }
+  h2.sec { font-family: var(--head); font-weight: 500; font-size: 28px; color: var(--title); text-transform: uppercase; margin: 6px 0 12px; }
   .ratingRow { display: flex; align-items: center; gap: 6px; font-size: 14px; margin-top: 6px; }
   .stars { color: var(--star); letter-spacing: 1px; }
-  .stars .off { color: #cfc9bb; }
+  .stars .off { color: var(--starOff); }
   .meta { font-size: 14px; margin-top: 4px; }
-  .meta .open { color: #1a7a3c; font-weight: 600; } .meta .closed { color: var(--accent); font-weight: 600; }
+  .meta .open { color: var(--ok); font-weight: 600; } .meta .closed { color: var(--bad); font-weight: 600; }
   hr.rule { border: none; border-top: 2px solid var(--line); margin: 16px 0; }
   .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
   .grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .tile { position: relative; border-radius: 18px; overflow: hidden; aspect-ratio: 4/3; background: #d9d4c7; border-bottom: 7px solid var(--primary); cursor: zoom-in; }
+  .tile { position: relative; border-radius: 18px; overflow: hidden; aspect-ratio: 4/3; background: var(--divider); border-bottom: 7px solid var(--primary); cursor: zoom-in; }
+  .delPhoto { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; padding: 0; border: none; border-radius: 50%; background: rgba(0,0,0,.65); color: #fff; font-size: 13px; cursor: pointer; }
   .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .cap { font-size: 14px; margin-top: 6px; }
   .desc { font-size: 15px; line-height: 1.7; max-width: 640px; white-space: pre-line; }
@@ -64,37 +75,38 @@
   .pill { display: flex; align-items: center; gap: 12px; background: var(--primary-soft); color: #fff; text-decoration: none; padding: 8px 22px 8px 8px; border-radius: 30px; font-weight: 600; font-size: 16px; min-width: 240px; }
   .pill .ic { width: 38px; height: 38px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-  .chip { background: #e4e0d6; border-radius: 16px; padding: 4px 12px; font-size: 13px; text-decoration: none; }
-  .deal { background: #fff7e0; border: 1px solid #f2c230; border-radius: 12px; padding: 12px 16px; margin-top: 16px; max-width: 640px; }
+  .chip { background: var(--surface); border-radius: 16px; padding: 4px 12px; font-size: 13px; text-decoration: none; }
+  .deal { background: var(--dealBg); border: 1px solid #f2c230; border-radius: 12px; padding: 12px 16px; margin-top: 16px; max-width: 640px; }
   .deal b { color: var(--accent); }
   .twoCol { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 40px; margin-top: 8px; }
-  .menuRow { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px dotted #b9b2a1; font-size: 15px; }
+  .menuRow { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px dotted var(--fieldBorder); font-size: 15px; }
   .menuRow span:last-child { font-weight: 600; white-space: nowrap; }
 
   .sumWrap { display: flex; gap: 34px; align-items: center; flex-wrap: wrap; }
   .bigNum { font-size: 56px; line-height: 1; font-weight: 500; }
   .bars { flex: 1; min-width: 220px; max-width: 420px; }
   .barRow { display: grid; grid-template-columns: 22px minmax(0, 1fr) 30px; gap: 8px; align-items: center; font-size: 13px; margin: 3px 0; }
-  .barTrack { background: #ddd8cb; height: 10px; border-radius: 5px; overflow: hidden; }
+  .barTrack { background: var(--track); height: 10px; border-radius: 5px; overflow: hidden; }
   .barFill { background: var(--star); height: 100%; }
   .rateRow { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
   .avatar { width: 44px; height: 44px; border-radius: 50%; border: 1.5px solid var(--text); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; background: var(--bg); overflow: hidden; }
-  .pick { font-size: 34px; background: none; border: none; cursor: pointer; color: #cfc9bb; padding: 0 2px; line-height: 1; }
+  .pick { font-size: 34px; background: none; border: none; cursor: pointer; color: var(--starOff); padding: 0 2px; line-height: 1; }
   .pick.on { color: var(--text); }
-  textarea.cmt { width: 100%; max-width: 560px; min-height: 80px; padding: 10px 12px; border-radius: 10px; border: 1px solid #b9b2a1; background: #fff; font-size: 14px; margin-top: 10px; resize: vertical; }
+  textarea.cmt { width: 100%; max-width: 560px; min-height: 80px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--fieldBorder); background: var(--field); color: var(--text); font-size: 14px; margin-top: 10px; resize: vertical; }
   .btn { background: var(--primary-soft); color: #fff; border: none; border-radius: 12px; padding: 9px 18px; font-size: 14px; cursor: pointer; }
   .btn.sel { background: var(--primary); box-shadow: inset 0 0 0 2px #0f3a5c; }
   .tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .iconBtn { width: 40px; height: 40px; border-radius: 50%; border: none; background: none; cursor: pointer; font-size: 20px; }
-  #search { padding: 9px 12px; border-radius: 10px; border: 1px solid #b9b2a1; font-size: 14px; min-width: 0; flex: 1 1 160px; max-width: 280px; display: none; }
-  .review { display: flex; gap: 12px; padding: 16px 0; border-bottom: 1px solid #d9d4c7; }
+  #search { background: var(--field); color: var(--text); padding: 9px 12px; border-radius: 10px; border: 1px solid var(--fieldBorder); font-size: 14px; min-width: 0; flex: 1 1 160px; max-width: 280px; display: none; }
+  .review { display: flex; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--divider); }
   .review .who { font-weight: 600; font-size: 15px; } .review .when { font-size: 12px; color: var(--muted); margin-left: 8px; }
   .review p { font-size: 14px; line-height: 1.6; margin-top: 4px; white-space: pre-line; }
-  .reply { background: #e4e0d6; border-radius: 10px; padding: 8px 12px; margin-top: 8px; font-size: 13px; }
+  .reply { background: var(--surface); border-radius: 10px; padding: 8px 12px; margin-top: 8px; font-size: 13px; }
   .msg { font-size: 13px; color: var(--accent); margin-top: 8px; min-height: 18px; }
-  #lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; align-items: center; justify-content: center; z-index: 50; padding: 20px; }
+  #lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.92); display: none; align-items: center; justify-content: center; z-index: 50; padding: 0; }
   #lightbox.show { display: flex; }
-  #lightbox img { max-width: 100%; max-height: 100%; border-radius: 10px; }
+  #lightbox img { width: 100%; height: 100%; object-fit: contain; }
+  #lightbox .x { position: absolute; top: 12px; right: 14px; width: 42px; height: 42px; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; font-size: 20px; display: flex; align-items: center; justify-content: center; }
 
   @media (max-width: 760px) {
     .shell { grid-template-columns: minmax(0, 1fr); }
@@ -121,11 +133,12 @@
     <div class="sideName" id="sideName"></div>
     <div class="sideBig" id="sideBig"></div>
     <nav class="nav" id="nav" aria-label="Business pages"></nav>
+    <button class="themeBtn" id="themeBtn" type="button">🌙 Dark mode</button>
     <a class="back" href="/">← Back to TT Discover</a>
   </aside>
   <main id="main"><p class="empty">Loading...</p></main>
 </div>
-<div id="lightbox" role="dialog" aria-label="Photo"><img alt=""></div>
+<div id="lightbox" role="dialog" aria-label="Photo"><span class="x" aria-hidden="true">✕</span><img alt=""></div>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -208,6 +221,13 @@ function render(){
   }
   firstRender = false;
   if (p === 'reviews') wireReviews();
+  if (p === 'photos'){
+    wirePhotos();
+    if (!custLoaded && !previewMode){
+      custLoaded = true;
+      fetch(`/api/businesses/${bizId}/photos`).then(r => r.ok ? r.json() : []).then(l => { custPhotos = l; if (route() === 'photos') render(); }).catch(() => {});
+    }
+  }
   m.querySelectorAll('.tile img').forEach(i => i.addEventListener('click', () => {
     if (embed && window.parent !== window){ window.parent.postMessage({ ttOpenPhoto: i.src }, location.origin); return; }
     $('lightbox').querySelector('img').src = i.src; $('lightbox').classList.add('show');
@@ -279,12 +299,56 @@ function menuHtml(){
     ${sections.length ? `<hr class="rule" style="margin:22px 0 14px"><div class="twoCol">${sections.map(s => `<section><h2 class="sec">${esc(s.key)}</h2>${s.items.map(i => `<div class="menuRow"><span>${esc(i.name)}</span><span>${esc(i.price)}</span></div>`).join('')}</section>`).join('')}</div>` : ''}`;
 }
 
+function shrink(file){
+  return new Promise(res => {
+    const r = new FileReader();
+    r.onload = e => { const img = new Image(); img.onload = () => {
+      const m = 1000; let w = img.width, h = img.height;
+      if (w > m || h > m){ if (w > h){ h = Math.round(h * m / w); w = m; } else { w = Math.round(w * m / h); h = m; } }
+      const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(img, 0, 0, w, h);
+      res(c.toDataURL('image/jpeg', 0.75)); }; img.src = e.target.result; };
+    r.readAsDataURL(file);
+  });
+}
+let custPhotos = [], custLoaded = false, photoFilter = 'all';
+function ownerPhotoList(){ return [biz.imageUrl, ...(biz.photos || []), ...(biz.menuPhotos || []), ...(biz.highlights || [])].filter(Boolean); }
 function photosHtml(){
-  const all = [biz.imageUrl, ...(biz.photos || []), ...(biz.menuPhotos || []), ...(biz.highlights || [])].filter(Boolean);
+  const owner = ownerPhotoList().map(u => ({ url: u, by: '' }));
+  const cust = custPhotos.map(c => ({ url: c.url, by: c.username ? '@' + c.username : 'Customer', id: c._id, del: !!(me && (c.userId === me.id || isOwner())) }));
+  const items = photoFilter === 'owner' ? owner : photoFilter === 'customers' ? cust : [...owner, ...cust];
+  const chip = (k, l) => `<button type="button" class="btn pfilter ${photoFilter === k ? 'sel' : ''}" data-k="${k}">${l}</button>`;
+  const add = previewMode ? '' : me
+    ? `<button type="button" class="btn" id="addPhotoBtn" style="margin-left:auto">📷 Add a photo</button><input type="file" id="photoFile" accept="image/*" style="display:none">`
+    : `<a class="btn" style="margin-left:auto;text-decoration:none" href="/account.html" target="_top">Sign in to add a photo</a>`;
   return `
     <h2 class="sec">Photos</h2><hr class="rule" style="margin-top:0">
-    <div class="tools" style="margin-bottom:16px"><button class="btn sel" type="button">All</button></div>
-    ${all.length ? tiles(all) : '<p class="empty">No photos yet.</p>'}`;
+    <div class="tools" style="margin-bottom:6px">${chip('all', 'All')}${chip('owner', 'Business')}${chip('customers', 'Customers')}${add}</div>
+    <div class="msg" id="pmsg" role="status"></div>
+    ${items.length ? `<div class="grid">${items.map(i => `<div><div class="tile"><img src="${i.url}" alt="" loading="lazy">${i.del ? `<button type="button" class="delPhoto" data-id="${i.id}" aria-label="Remove photo">✕</button>` : ''}</div>${i.by ? `<div class="cap" style="font-size:12px;color:var(--muted)">${esc(i.by)}</div>` : ''}</div>`).join('')}</div>` : `<p class="empty">${photoFilter === 'customers' ? 'No customer photos yet. Be the first to add one!' : 'No photos yet.'}</p>`}`;
+}
+function wirePhotos(){
+  document.querySelectorAll('.pfilter').forEach(b => b.addEventListener('click', () => { photoFilter = b.dataset.k; render(); }));
+  const addBtn = $('addPhotoBtn');
+  if (addBtn){
+    addBtn.addEventListener('click', () => $('photoFile').click());
+    $('photoFile').addEventListener('change', async e => {
+      const f = e.target.files[0]; e.target.value = '';
+      if (!f) return;
+      if (!f.type.startsWith('image/')){ $('pmsg').textContent = 'Please choose an image file.'; return; }
+      $('pmsg').textContent = 'Uploading...';
+      const url = await shrink(f);
+      const res = await fetch(`/api/businesses/${bizId}/photos`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': token }, body: JSON.stringify({ url }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok){ $('pmsg').textContent = data.error || 'Could not add your photo.'; return; }
+      custPhotos = [data.photo, ...custPhotos]; photoFilter = 'customers'; render();
+    });
+  }
+  document.querySelectorAll('.delPhoto').forEach(b => b.addEventListener('click', async ev => {
+    ev.stopPropagation();
+    if (!confirm('Remove this photo?')) return;
+    const res = await fetch(`/api/businesses/${bizId}/photos/${b.dataset.id}`, { method: 'DELETE', headers: { 'x-auth-token': token } });
+    if (res.ok){ custPhotos = custPhotos.filter(c => c._id !== b.dataset.id); render(); }
+  }));
 }
 
 function sortedReviews(){
@@ -365,6 +429,17 @@ function wireReviews(){
   });
 }
 
+function applyTheme(t){
+  if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); else document.documentElement.removeAttribute('data-theme');
+  $('themeBtn').textContent = t === 'dark' ? '☀ Light mode' : '🌙 Dark mode';
+}
+applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+$('themeBtn').addEventListener('click', () => {
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  try { localStorage.setItem('tt_theme', next); } catch (e) {}
+  applyTheme(next);
+});
+window.addEventListener('storage', e => { if (e.key === 'tt_theme') applyTheme(e.newValue === 'dark' ? 'dark' : 'light'); });
 $('lightbox').addEventListener('click', () => $('lightbox').classList.remove('show'));
 document.addEventListener('keydown', e => { if (e.key === 'Escape') $('lightbox').classList.remove('show'); });
 window.addEventListener('hashchange', render);

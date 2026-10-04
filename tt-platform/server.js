@@ -86,6 +86,7 @@ function sanitizeSocial(obj){
 
 let businessesCol = null;
 let usersCol = null;
+let photosCol = null;
 
 // ---------------- Weekly hours (Mon-Sun open/close per day) ----------------
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -148,6 +149,7 @@ async function initDb(){
     const db = client.db('tt_platform');
     businessesCol = db.collection('businesses');
     usersCol = db.collection('users');
+    photosCol = db.collection('photoUploads');
     console.log('Connected to database.');
   } catch (err) {
     console.error('Database connection failed:', err.message);
@@ -588,6 +590,48 @@ app.get('/api/my/businesses', requireUser, async (req, res) => {
 });
 
 const BUSINESS_LIMIT = { free: 1, premium: 3 };
+
+
+// ---------------- Customer photo uploads (Photos page) ----------------
+app.get('/api/businesses/:id/photos', async (req, res) => {
+  if (!photosCol) return res.json([]);
+  try {
+    const list = await photosCol.find({ bizId: req.params.id }).sort({ createdAt: -1 }).limit(60).toArray();
+    res.json(list.map(p => ({ _id: p._id.toString(), url: p.url, username: p.username || '', userId: p.userId, createdAt: p.createdAt })));
+  } catch (err) { res.json([]); }
+});
+
+app.post('/api/businesses/:id/photos', requireUser, async (req, res) => {
+  if (!photosCol || !businessesCol) return res.status(503).json({ error: 'Database not connected' });
+  try {
+    const url = String((req.body && req.body.url) || '');
+    if (!/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(url)) return res.status(400).json({ error: 'Please choose a photo.' });
+    if (url.length > 450000) return res.status(400).json({ error: 'That photo is too big. Try a smaller one.' });
+    const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) }, { projection: { _id: 1 } });
+    if (!biz) return res.status(404).json({ error: 'Business not found' });
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recent = await photosCol.countDocuments({ bizId: req.params.id, userId: req.user._id.toString(), createdAt: { $gte: since } });
+    if (recent >= 5) return res.status(429).json({ error: 'You can add up to 5 photos per day for each business.' });
+    const total = await photosCol.countDocuments({ bizId: req.params.id });
+    if (total >= 200) return res.status(400).json({ error: 'This page has reached its photo limit.' });
+    const doc = { bizId: req.params.id, userId: req.user._id.toString(), username: String(req.user.username || '').slice(0, 60), url, createdAt: new Date() };
+    const r = await photosCol.insertOne(doc);
+    res.json({ photo: { _id: r.insertedId.toString(), url, username: doc.username, userId: doc.userId, createdAt: doc.createdAt } });
+  } catch (err) { res.status(400).json({ error: 'Could not add your photo.' }); }
+});
+
+app.delete('/api/businesses/:id/photos/:photoId', requireUser, async (req, res) => {
+  if (!photosCol || !businessesCol) return res.status(503).json({ error: 'Database not connected' });
+  try {
+    const photo = await photosCol.findOne({ _id: new ObjectId(req.params.photoId), bizId: req.params.id });
+    if (!photo) return res.status(404).json({ error: 'Photo not found' });
+    const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) }, { projection: { ownerId: 1 } });
+    const me = req.user._id.toString();
+    if (photo.userId !== me && !(biz && biz.ownerId === me)) return res.status(403).json({ error: 'Not allowed' });
+    await photosCol.deleteOne({ _id: photo._id });
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ error: 'Could not remove photo.' }); }
+});
 
 const TEMPLATES = ['food'];
 app.post('/api/my/businesses', requireUser, requireBusinessAccount, async (req, res) => {
