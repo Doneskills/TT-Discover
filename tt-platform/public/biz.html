@@ -230,7 +230,7 @@ function render(){
   }
   m.querySelectorAll('.tile img').forEach(i => i.addEventListener('click', () => {
     if (embed && window.parent !== window){ window.parent.postMessage({ ttOpenPhoto: i.src }, location.origin); return; }
-    $('lightbox').querySelector('img').src = i.src; $('lightbox').classList.add('show');
+    $('lightbox').querySelector('img').src = i.src; $('lightbox').classList.add('show'); document.body.style.overflow = 'hidden';
   }));
 }
 
@@ -440,8 +440,9 @@ $('themeBtn').addEventListener('click', () => {
   applyTheme(next);
 });
 window.addEventListener('storage', e => { if (e.key === 'tt_theme') applyTheme(e.newValue === 'dark' ? 'dark' : 'light'); });
-$('lightbox').addEventListener('click', () => $('lightbox').classList.remove('show'));
-document.addEventListener('keydown', e => { if (e.key === 'Escape') $('lightbox').classList.remove('show'); });
+function closeLightbox(){ $('lightbox').classList.remove('show'); document.body.style.overflow = ''; }
+$('lightbox').addEventListener('click', closeLightbox);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
 window.addEventListener('hashchange', render);
 if (embed && embedMinH) document.querySelector('.shell').style.minHeight = embedMinH + 'px';
 if (embed && window.ResizeObserver) new ResizeObserver(sendHeight).observe(document.querySelector('.shell'));

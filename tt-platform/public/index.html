@@ -249,8 +249,9 @@
     <iframe id="detailMapFrame" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
   </div>
   <div id="detailContent"></div>
-<div id="photoLightbox" role="dialog" aria-label="Photo"><span class="x" aria-hidden="true">✕</span><img alt=""></div>
 </div>
+
+<div id="photoLightbox" role="dialog" aria-label="Photo"><span class="x" aria-hidden="true">✕</span><img alt=""></div>
 
 <div id="aboutModal">
   <div id="aboutPanel">
@@ -497,7 +498,7 @@ window.addEventListener('message', (e) => {
   if (!f || e.source !== f.contentWindow || !e.data) return;
   if (e.data.ttEmbedHeight) f.style.height = e.data.ttEmbedHeight + 'px';
   if (e.data.ttEmbedTop) f.scrollIntoView({ block: 'start' });
-  if (e.data.ttOpenPhoto){ const lb = document.getElementById('photoLightbox'); lb.querySelector('img').src = e.data.ttOpenPhoto; lb.classList.add('show'); }
+  if (e.data.ttOpenPhoto) openPhoto(e.data.ttOpenPhoto);
 });
 
 function wireReviewTab(biz){
@@ -586,7 +587,17 @@ document.getElementById('searchInput').addEventListener('input', (e) => {
 
 loadBusinesses();
 checkSignInStatus();
-document.getElementById('photoLightbox').addEventListener('click', () => document.getElementById('photoLightbox').classList.remove('show'));
+function openPhoto(src){
+  const lb = document.getElementById('photoLightbox');
+  lb.querySelector('img').src = src; lb.classList.add('show');
+  document.getElementById('detailModal').style.overflow = 'hidden';
+}
+function closePhoto(){
+  document.getElementById('photoLightbox').classList.remove('show');
+  document.getElementById('detailModal').style.overflow = '';
+}
+document.getElementById('photoLightbox').addEventListener('click', closePhoto);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePhoto(); });
 </script>
 </body>
 </html>
