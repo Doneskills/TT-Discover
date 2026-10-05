@@ -660,7 +660,7 @@ document.getElementById('studioTopAvatar').addEventListener('click', () => {
 });
 
 // ---------------- Business Designs picker + "View it" preview ----------------
-const DESIGNS = [{ id: 'food', name: 'Food', blurb: 'Blue sidebar with Menu, Highlights, Reviews and Photos pages. Great for restaurants, bakeries and food trucks.', swatch: '#23659b' }];
+const DESIGNS = [{ id: 'food', name: 'Food', blurb: 'Blue sidebar with Menu, Highlights, Reviews and Photos pages. Great for restaurants, bakeries and food trucks.', swatch: '#23659b' }, { id: 'fabric', name: 'Clothing and fabric', blurb: 'Warm brown and cream with a big bold name, a photo collage and a gallery. Great for boutiques, tailors and fabric shops.', swatch: '#2a1810' }];
 let chosenDesign = 'food';
 function paintDesignCards(){
   document.getElementById('designCards').innerHTML = DESIGNS.map(d => `

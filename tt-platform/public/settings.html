@@ -225,6 +225,31 @@
       <h3 style="font-size:16px;margin:26px 0 4px;">Current deals</h3><div id="dealsList"></div>
     </div>
 
+    <div class="panel" data-field="posts">
+      <p class="toolNote">Share news, specials or updates. Posts show on the Posts page of your business page.</p>
+      <label for="p-title">Post title</label><input type="text" id="p-title" maxlength="100" placeholder="e.g. Now open on Sundays!">
+      <label for="p-content">Content</label><textarea id="p-content" maxlength="1000" placeholder="Tell people what's new..."></textarea>
+      <div id="p-preview" class="photoGrid" style="max-width:140px;"></div>
+      <button type="button" class="ghost" id="p-photoBtn" style="margin-top:8px;">Add a photo (optional)</button>
+      <input type="file" id="p-file" accept="image/*" style="display:none;">
+      <div class="savebar"><button type="button" class="primary" id="postBtn">Publish Post</button><span class="msg" id="postMsg" role="status"></span></div>
+      <h3 style="font-size:16px;margin:26px 0 4px;">Your posts</h3><div id="postsList"></div>
+    </div>
+
+    <div class="panel" data-field="jobs">
+      <p class="toolNote">Post openings at your business. They show on the Jobs page of your business page.</p>
+      <label for="j-title">Job title</label><input type="text" id="j-title" maxlength="100" placeholder="e.g. Kitchen assistant">
+      <label for="j-desc">Description</label><textarea id="j-desc" maxlength="1000" placeholder="What will they be doing?"></textarea>
+      <label for="j-loc">Location</label><input type="text" id="j-loc" maxlength="150" placeholder="e.g. Arima">
+      <label for="j-type">Employment type</label>
+      <select id="j-type"><option value="">Select one</option><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Temporary</option></select>
+      <label for="j-salary">Salary (optional)</label><input type="text" id="j-salary" maxlength="100" placeholder="e.g. $4,000 - $5,500 a month">
+      <label for="j-req">Requirements</label><textarea id="j-req" maxlength="1000" placeholder="What should they already have or know?"></textarea>
+      <label for="j-close">Closing date (optional)</label><input type="date" id="j-close">
+      <div class="savebar"><button type="button" class="primary" id="jobBtn">Post Job</button><span class="msg" id="jobMsg" role="status"></span></div>
+      <h3 style="font-size:16px;margin:26px 0 4px;">Your job listings</h3><div id="jobsList"></div>
+    </div>
+
     <div class="panel" data-field="staff">
       <p class="toolNote">Add a staff member and choose what they can manage. They sign in separately from the Staff Login link.</p>
       <label for="s-email">Email</label><input type="text" id="s-email" autocomplete="off">
@@ -268,6 +293,8 @@ const SECTIONS = [
   { id: 'collab', label: 'Collaborators', title: 'Collaborators', ownerOnly: true, noSave: true, subs: [['collab','Collaborators']], load: () => renderCollab() },
   { id: 'staff', label: 'Staff', title: 'Staff', ownerOnly: true, noSave: true, subs: [['staff','Staff']], load: () => renderStaff() },
   { id: 'analytics', label: 'Analytics', title: 'Analytics', noSave: true, subs: [['analytics','Analytics']], load: () => renderAnalytics() },
+  { id: 'posts', label: 'Posts', title: 'Posts', noSave: true, subs: [['posts','Posts']], load: () => renderPosts() },
+  { id: 'jobs', label: 'Jobs', title: 'Jobs', noSave: true, subs: [['jobs','Jobs']], load: () => renderJobs() },
   { id: 'deals', label: 'Deals', title: 'Deals', noSave: true, subs: [['deals','Deals']], load: () => renderDeals() }
 ];
 
@@ -318,7 +345,7 @@ function selectBiz(id){
   $('msg').textContent = '';
 }
 
-const DESIGNS = [{ id: 'food', name: 'Food', blurb: 'Blue sidebar with Menu, Highlights, Reviews and Photos pages. Great for restaurants, bakeries and food trucks.', swatch: '#23659b' }];
+const DESIGNS = [{ id: 'food', name: 'Food', blurb: 'Blue sidebar with Menu, Highlights, Reviews and Photos pages. Great for restaurants, bakeries and food trucks.', swatch: '#23659b' }, { id: 'fabric', name: 'Clothing and fabric', blurb: 'Warm brown and cream with a big bold name, a photo collage and a gallery. Great for boutiques, tailors and fabric shops.', swatch: '#2a1810' }];
 function paintDesigns(){
   $('designCards').innerHTML = DESIGNS.map(d => `<button type="button" class="designCard${d.id === state.template ? ' on' : ''}" data-id="${d.id}" aria-pressed="${d.id === state.template}"><span class="sw" style="background:${d.swatch}"></span><span><b>${d.name}</b>${d.id === state.template ? ' ✓' : ''}<br><span style="font-size:12px;color:var(--muted)">${d.blurb}</span></span></button>`).join('');
   document.querySelectorAll('.designCard').forEach(b => b.addEventListener('click', () => { state.template = b.dataset.id; paintDesigns(); }));
@@ -530,6 +557,45 @@ async function renderDeals(){
     box.appendChild(listRow(`<b>${esc(d.title)}</b><div class="sub">${esc(d.description || '')}</div><div class="sub">${new Date(d.createdAt || Date.now()).toLocaleDateString()}${end}</div>`, 'Delete', async () => { await api('deals/' + d._id, 'DELETE'); renderDeals(); }));
   });
 }
+
+// ---------------- Posts ----------------
+let postImage = '';
+function paintPostPhoto(){ $('p-preview').innerHTML = postImage ? `<div class="ph"><img src="${postImage}" alt=""><button type="button" class="rm" id="p-rm" aria-label="Remove photo">✕</button></div>` : ''; if (postImage) $('p-rm').addEventListener('click', () => { postImage = ''; paintPostPhoto(); }); }
+$('p-photoBtn').addEventListener('click', () => $('p-file').click());
+$('p-file').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (f && f.type.startsWith('image/')){ postImage = await shrink(f); paintPostPhoto(); } });
+async function renderPosts(){
+  await refreshBiz();
+  const box = $('postsList'); const posts = biz.posts || [];
+  box.innerHTML = posts.length ? '' : empty('No posts yet.');
+  posts.forEach(p => box.appendChild(listRow(`<b>${esc(p.title)}</b><div class="sub">${new Date(p.createdAt).toLocaleDateString()}</div>${p.content ? `<div class="sub">${esc(p.content)}</div>` : ''}${p.imageUrl ? `<img src="${p.imageUrl}" alt="" style="max-width:110px;border-radius:8px;margin-top:6px;display:block;">` : ''}`, 'Delete', async () => { await api('posts/' + p._id, 'DELETE'); renderPosts(); })));
+}
+$('postBtn').addEventListener('click', async () => {
+  const msg = $('postMsg'), title = $('p-title').value.trim();
+  if (!title){ msg.textContent = 'A post title is required.'; return; }
+  msg.textContent = 'Posting...';
+  const res = await api('posts', 'POST', { title, content: $('p-content').value.trim(), imageUrl: postImage });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok){ msg.textContent = 'Posted!'; $('p-title').value = ''; $('p-content').value = ''; postImage = ''; paintPostPhoto(); renderPosts(); }
+  else msg.textContent = data.error || 'Could not create post.';
+});
+
+// ---------------- Jobs ----------------
+async function renderJobs(){
+  await refreshBiz();
+  const box = $('jobsList'); const jobs = biz.jobs || [];
+  box.innerHTML = jobs.length ? '' : empty('No job listings yet.');
+  jobs.forEach(j => box.appendChild(listRow(`<b>${esc(j.title)}</b>${j.employmentType ? ' · ' + esc(j.employmentType) : ''}<div class="sub">${j.location ? esc(j.location) + ' · ' : ''}Posted ${new Date(j.createdAt).toLocaleDateString()}${j.closingDate ? ' · closes ' + new Date(j.closingDate).toLocaleDateString() : ''}</div>${j.salary ? `<div class="sub">Salary: ${esc(j.salary)}</div>` : ''}`, 'Delete', async () => { await api('jobs/' + j._id, 'DELETE'); renderJobs(); })));
+}
+$('jobBtn').addEventListener('click', async () => {
+  const msg = $('jobMsg'), title = $('j-title').value.trim();
+  if (!title){ msg.textContent = 'A job title is required.'; return; }
+  msg.textContent = 'Posting...';
+  const res = await api('jobs', 'POST', { title, description: $('j-desc').value.trim(), location: $('j-loc').value.trim(), employmentType: $('j-type').value, salary: $('j-salary').value.trim(), requirements: $('j-req').value.trim(), closingDate: $('j-close').value });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok){ msg.textContent = 'Posted!'; ['j-title','j-desc','j-loc','j-type','j-salary','j-req','j-close'].forEach(id => $(id).value = ''); renderJobs(); }
+  else msg.textContent = data.error || 'Could not post job.';
+});
+
 $('postDealBtn').addEventListener('click', async () => {
   const msg = $('dealMsg'), title = $('d-title').value.trim();
   if (!title){ msg.textContent = 'A deal title is required.'; return; }

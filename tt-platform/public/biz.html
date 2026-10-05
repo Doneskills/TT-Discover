@@ -8,7 +8,7 @@
 <script>try { if (localStorage.getItem('tt_theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500&family=Poppins:wght@400;500;600;700;800&family=Great+Vibes&display=swap" rel="stylesheet">
 <style>
   :root {
     --surface: var(--surface); --divider: var(--divider); --track: var(--track); --starOff: var(--starOff); --fieldBorder: var(--fieldBorder); --field: #ffffff;
@@ -32,6 +32,7 @@
   .embed .shell { min-height: 0; }
   .embed .side { position: static; height: auto; }
   .embed .back { display: none; }
+  .collage img { }
   .post { padding: 14px 0; border-bottom: 1px solid var(--divider); }
   .post .pd { font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
   .post img { max-width: 100%; border-radius: 12px; margin-top: 8px; }
@@ -108,6 +109,49 @@
   #lightbox img { width: 100%; height: 100%; object-fit: contain; }
   #lightbox .x { position: absolute; top: 12px; right: 14px; width: 42px; height: 42px; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; font-size: 20px; display: flex; align-items: center; justify-content: center; }
 
+
+  /* ---------- Fabric design ---------- */
+  body[data-template="fabric"] {
+    --bg: #ebe6df; --text: #2a1810; --muted: #6d5a4c; --surface: #ddd3c6; --divider: #cdbfae; --track: #d8ccbc; --field: #f6f2ec;
+    --fieldBorder: #b79f89; --title: #2a1810; --primary: #2a1810; --primary-soft: #4a2e1f; --line: #a8643a; --accent: #a8643a; --dealBg: #f3e6d6;
+    --ok: #3b6b3b; --bad: #a33a1f; --star: #c98a3a; --starOff: #cdbfae; --side: #2a1810;
+  }
+  [data-theme="dark"] body[data-template="fabric"] {
+    --bg: #1a1310; --text: #f0e6da; --muted: #b7a594; --surface: #2c211b; --divider: #3a2d25; --track: #3a2d25; --field: #241b16;
+    --fieldBorder: #5a463a; --title: #f0e6da; --primary: #0f0a08; --primary-soft: #5a3a28; --line: #c98a5b; --accent: #c98a5b; --dealBg: #33261c;
+    --ok: #7fc77f; --bad: #ff8a6b; --star: #e0a85a; --starOff: #4a3a30; --side: #0f0a08;
+  }
+  .fabric .shell { grid-template-columns: minmax(0, 1fr) 210px; }
+  .fabric .side { grid-column: 2; grid-row: 1; background: var(--side); }
+  .fabric main { grid-column: 1; grid-row: 1; padding: 0; }
+  .fabric .pad { padding: 40px 44px 80px; }
+  .fabric .sideBig { display: none; }
+  .fabric .logo { border-color: var(--accent); }
+  .fabric .sideName { font-family: var(--body); font-weight: 700; font-size: 15px; letter-spacing: 1px; margin-bottom: 22px; }
+  .fabric .nav a { border-radius: 0; border-left: 3px solid transparent; }
+  .fabric .nav a.active { background: transparent; border-left-color: var(--accent); font-weight: 600; }
+  .fabric .nav { margin-top: 0; }
+  .fabric h1.title { font-family: var(--body); font-weight: 800; font-size: clamp(38px, 6vw, 78px); line-height: .95; letter-spacing: -1px; }
+  .fabric h2.sec { font-family: var(--body); font-weight: 700; font-size: 22px; letter-spacing: .5px; }
+  .fabric .tile { border-radius: 0; border-bottom: none; aspect-ratio: 3/4; }
+  .fabric .grid { gap: 22px; }
+  .fabric .btn, .fabric .pill { border-radius: 4px; }
+  .fabric .pill { background: transparent; color: #f3ece3; border: 1px solid rgba(243,236,227,.35); }
+  .fabric .pill .ic { background: var(--accent); }
+  .script { font-family: 'Great Vibes', cursive; font-size: clamp(34px, 4.5vw, 56px); color: var(--accent); line-height: 1.1; margin: 14px 0 18px; }
+  .fHome { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); min-height: 100%; }
+  .fText { padding: 64px 36px 60px 44px; border-left: 2px solid var(--line); margin-left: 26px; border-bottom: 2px solid var(--line);
+    background: radial-gradient(circle at 15% 90%, rgba(190,170,150,.35), transparent 55%), radial-gradient(circle at 50% 100%, rgba(235,190,165,.28), transparent 45%); }
+  .fMeta { font-size: 14px; line-height: 1.8; }
+  .fPanel { background: var(--side); color: #f3ece3; padding: 40px 34px 30px; display: flex; flex-direction: column; gap: 22px; }
+  .collage { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .collage div { aspect-ratio: 1; overflow: hidden; background: #3a2a20; }
+  .collage img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: zoom-in; }
+  .collage .c1 { grid-column: 1 / -1; aspect-ratio: 4/5; }
+  .collage .wide { grid-column: 1 / -1; aspect-ratio: 16/10; }
+  .fContact { margin-top: auto; text-align: right; font-size: 18px; line-height: 1.6; }
+  .fContact a { color: #f3ece3; text-decoration: none; display: block; }
+
   @media (max-width: 760px) {
     .shell { grid-template-columns: minmax(0, 1fr); }
     .side { min-width: 0; }
@@ -122,6 +166,20 @@
     .grid, .grid.four { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
     .twoCol { grid-template-columns: 1fr; }
     .contact { align-items: stretch; } .pill { min-width: 0; }
+  }
+
+  @media (max-width: 760px) {
+    .fabric .shell { grid-template-columns: minmax(0, 1fr); }
+    .fabric .side { grid-column: 1; grid-row: 1; }
+    .fabric main { grid-column: 1; grid-row: 2; }
+    .fabric .pad { padding: 22px 16px 60px; }
+    .fabric .nav a { border-left: none; border-bottom: 3px solid transparent; }
+    .fabric .nav a.active { border-bottom-color: var(--accent); }
+    .fHome { grid-template-columns: minmax(0, 1fr); }
+    .fText { margin-left: 14px; padding: 34px 18px 34px 22px; }
+    .fPanel { padding: 22px 16px; }
+    .fContact { text-align: left; }
+    .fabric .grid { gap: 10px; }
   }
 </style>
 </head>
@@ -153,7 +211,7 @@ let biz = null, me = null, sortMode = 'relevant', query = '', pickRating = 0;
 
 const DAYS = ['sun','mon','tue','wed','thu','fri','sat'];
 function pages(){
-  const l = [['home','Home'],['menu','Menu'],['reviews','Reviews'],['photos','Photos']];
+  const l = biz && biz.template === 'fabric' ? [['home','Home'],['photos','Photos'],['reviews','Reviews']] : [['home','Home'],['menu','Menu'],['reviews','Reviews'],['photos','Photos']];
   if (biz && (biz.posts || []).length) l.push(['posts','Posts']);
   if (biz && (biz.jobs || []).length) l.push(['jobs','Jobs']);
   return l;
@@ -212,7 +270,9 @@ function render(){
   paintShell();
   const p = route();
   const m = $('main');
-  m.innerHTML = p === 'home' ? homeHtml() : p === 'menu' ? menuHtml() : p === 'reviews' ? reviewsHtml() : p === 'posts' ? postsHtml() : p === 'jobs' ? jobsHtml() : photosHtml();
+  const inner = p === 'home' ? homeHtml() : p === 'menu' ? menuHtml() : p === 'reviews' ? reviewsHtml() : p === 'posts' ? postsHtml() : p === 'jobs' ? jobsHtml() : photosHtml();
+  document.documentElement.classList.toggle('fabric', biz.template === 'fabric');
+  m.innerHTML = (biz.template === 'fabric' && p === 'home') ? inner : `<div class="pad">${inner}</div>`;
   window.scrollTo(0, 0);
   if (embed){
     m.querySelectorAll('a[href^="/"]').forEach(a => a.target = '_top');
@@ -228,7 +288,7 @@ function render(){
       fetch(`/api/businesses/${bizId}/photos`).then(r => r.ok ? r.json() : []).then(l => { custPhotos = l; if (route() === 'photos') render(); }).catch(() => {});
     }
   }
-  m.querySelectorAll('.tile img').forEach(i => i.addEventListener('click', () => {
+  m.querySelectorAll('.tile img, .collage img').forEach(i => i.addEventListener('click', () => {
     if (embed && window.parent !== window){ window.parent.postMessage({ ttOpenPhoto: i.src }, location.origin); return; }
     $('lightbox').querySelector('img').src = i.src; $('lightbox').classList.add('show'); document.body.style.overflow = 'hidden';
   }));
@@ -236,7 +296,40 @@ function render(){
 
 function tiles(urls, cls){ return urls.length ? `<div class="grid ${cls || ''}">${urls.map(u => `<div class="tile"><img src="${u}" alt="" loading="lazy"></div>`).join('')}</div>` : ''; }
 
+function homeFabric(){
+  const r = ratingOf(biz), st = openStatus(biz.hours);
+  const pics = [biz.imageUrl, ...(biz.photos || [])].filter(Boolean).slice(0, 3);
+  const now = new Date();
+  const deals = (biz.deals || []).filter(d => !d.endDate || new Date(d.endDate) >= now);
+  const soc = biz.social || {};
+  const cls = ['', 'c1', '', ''];
+  const collage = pics.map((u, i) => `<div class="${pics.length === 1 ? 'c1' : (i === 2 ? 'wide' : '')}"><img src="${u}" alt="" loading="lazy"></div>`).join('');
+  return `<div class="fHome">
+    <div class="fText">
+      <h1 class="title">${esc(biz.name)}</h1>
+      ${biz.tagline || biz.category ? `<div class="script">${esc(biz.tagline || biz.category)}</div>` : ''}
+      <div class="fMeta">
+        <div>${r.count ? `<b>${r.avg.toFixed(1)}</b> <span class="stars">★</span> (${r.count})` : 'No reviews yet'}</div>
+        ${st.known ? `<div class="meta"><span class="${st.open ? 'open' : 'closed'}">${esc(st.text)}</span></div>` : (st.text ? `<div>${esc(st.text)}</div>` : '')}
+        ${biz.hours ? `<div style="color:var(--muted);font-size:12px">${hoursLines(biz.hours)}</div>` : ''}
+        ${biz.address || biz.area ? `<div>📍 ${esc([biz.address, biz.area].filter(Boolean).join(', '))}</div>` : ''}
+      </div>
+      ${biz.description ? `<p class="desc" style="margin-top:20px">${esc(biz.description)}</p>` : ''}
+      ${deals.map(d => `<div class="deal"><b>🔥 ${esc(d.title)}</b><br>${esc(d.description)}</div>`).join('')}
+      ${biz.hiring ? '<div class="chips"><span class="chip">💼 Hiring now</span></div>' : ''}
+      <div class="chips">${['facebook','instagram','website'].filter(k => soc[k]).map(k => `<a class="chip" href="${esc(soc[k])}" target="_blank" rel="noopener">${k[0].toUpperCase() + k.slice(1)}</a>`).join('')}</div>
+    </div>
+    <div class="fPanel">
+      ${collage ? `<div class="collage">${collage}</div>` : ''}
+      <div class="fContact">
+        ${biz.email ? `<a href="mailto:${esc(biz.email)}">${esc(biz.email)}</a>` : ''}
+        ${biz.phone ? `<a href="tel:${esc(biz.phone)}">${esc(biz.phone)}</a>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
 function homeHtml(){
+  if (biz.template === 'fabric') return homeFabric();
   const r = ratingOf(biz), st = openStatus(biz.hours);
   const pics = [biz.imageUrl, ...(biz.photos || [])].filter(Boolean).slice(0, 6);
   const now = new Date();
@@ -269,7 +362,7 @@ function aboutHtml(){
   return rows ? `<h2 class="sec" style="margin-top:22px">About</h2>${rows}` : '';
 }
 function postsHtml(){
-  return `<h2 class="sec">Posts</h2><hr class="rule" style="margin-top:0">` + (biz.posts || []).slice().reverse().map(p => `
+  return `<h2 class="sec">Posts</h2><hr class="rule" style="margin-top:0">` + (biz.posts || []).map(p => `
     <div class="post"><b>${esc(p.title)}</b><div class="pd">${new Date(p.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
       ${p.content ? `<p class="desc">${esc(p.content)}</p>` : ''}${p.imageUrl ? `<img src="${p.imageUrl}" alt="">` : ''}</div>`).join('');
 }
@@ -320,11 +413,16 @@ function photosHtml(){
   const add = previewMode ? '' : me
     ? `<button type="button" class="btn" id="addPhotoBtn" style="margin-left:auto">📷 Add a photo</button><input type="file" id="photoFile" accept="image/*" style="display:none">`
     : `<a class="btn" style="margin-left:auto;text-decoration:none" href="/account.html" target="_top">Sign in to add a photo</a>`;
+  const fab = biz.template === 'fabric' && photoFilter === 'all' && owner.length;
+  const feat = fab ? owner.slice(0, 3) : [];
+  const rest = fab ? items.slice(feat.length) : items;
+  const tileHtml = i => `<div><div class="tile"><img src="${i.url}" alt="" loading="lazy">${i.del ? `<button type="button" class="delPhoto" data-id="${i.id}" aria-label="Remove photo">✕</button>` : ''}</div>${i.by ? `<div class="cap" style="font-size:12px;color:var(--muted)">${esc(i.by)}</div>` : ''}</div>`;
   return `
     <h2 class="sec">Photos</h2><hr class="rule" style="margin-top:0">
+    ${feat.length ? `<div class="grid">${feat.map(tileHtml).join('')}</div><hr class="rule" style="margin:22px 0 14px">` : ''}
     <div class="tools" style="margin-bottom:6px">${chip('all', 'All')}${chip('owner', 'Business')}${chip('customers', 'Customers')}${add}</div>
     <div class="msg" id="pmsg" role="status"></div>
-    ${items.length ? `<div class="grid">${items.map(i => `<div><div class="tile"><img src="${i.url}" alt="" loading="lazy">${i.del ? `<button type="button" class="delPhoto" data-id="${i.id}" aria-label="Remove photo">✕</button>` : ''}</div>${i.by ? `<div class="cap" style="font-size:12px;color:var(--muted)">${esc(i.by)}</div>` : ''}</div>`).join('')}</div>` : `<p class="empty">${photoFilter === 'customers' ? 'No customer photos yet. Be the first to add one!' : 'No photos yet.'}</p>`}`;
+    ${rest.length ? `<div class="grid">${rest.map(tileHtml).join('')}</div>` : (feat.length ? '' : `<p class="empty">${photoFilter === 'customers' ? 'No customer photos yet. Be the first to add one!' : 'No photos yet.'}</p>`)}`;
 }
 function wirePhotos(){
   document.querySelectorAll('.pfilter').forEach(b => b.addEventListener('click', () => { photoFilter = b.dataset.k; render(); }));
