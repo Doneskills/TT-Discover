@@ -35,7 +35,7 @@
   .collage img { }
   .post { padding: 14px 0; border-bottom: 1px solid var(--divider); }
   .post .pd { font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
-  .post img { max-width: 100%; border-radius: 12px; margin-top: 8px; }
+  .post img { max-width: 100%; border-radius: 12px; margin-top: 8px; cursor: zoom-in; }
   .aboutRow { font-size: 14px; margin: 5px 0; } .aboutRow b { color: var(--primary); }
   .replyBox { margin-top: 8px; } .replyBox textarea { width: 100%; max-width: 480px; min-height: 52px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--fieldBorder); font-size: 13px; }
   .replyBox .btn { padding: 6px 14px; font-size: 13px; margin-top: 6px; }
@@ -288,7 +288,7 @@ function render(){
       fetch(`/api/businesses/${bizId}/photos`).then(r => r.ok ? r.json() : []).then(l => { custPhotos = l; if (route() === 'photos') render(); }).catch(() => {});
     }
   }
-  m.querySelectorAll('.tile img, .collage img').forEach(i => i.addEventListener('click', () => {
+  m.querySelectorAll('.tile img, .collage img, .post img').forEach(i => i.addEventListener('click', () => {
     if (embed && window.parent !== window){ window.parent.postMessage({ ttOpenPhoto: i.src }, location.origin); return; }
     $('lightbox').querySelector('img').src = i.src; $('lightbox').classList.add('show'); document.body.style.overflow = 'hidden';
   }));
