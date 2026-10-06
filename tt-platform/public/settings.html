@@ -138,7 +138,10 @@
 <div id="notBusiness" style="display:none;">
   <h2>Settings are for business accounts</h2>
   <p>This settings page is for people who have a business. Your personal details live on your <a href="/profile.html">Profile</a>.</p>
-  <p style="margin-top:10px;"><a href="/">← Back to TT Discover</a></p>
+  <p style="margin-top:14px;">Want to put your business on TT Discover?</p>
+  <button type="button" id="switchBizBtn" style="margin-top:8px;padding:11px 18px;border:none;border-radius:22px;background:#e0562f;color:#fff;font-weight:600;cursor:pointer;font-size:14px;">Switch to a business account</button>
+  <div id="switchMsg" role="status" style="margin-top:8px;font-size:13px;"></div>
+  <p style="margin-top:14px;"><a href="/">← Back to TT Discover</a></p>
 </div>
 
 <div id="noBiz" style="display:none;">
@@ -198,7 +201,7 @@
 
     <div class="panel" data-field="about" id="aboutFields"></div>
 
-    <div class="panel" data-field="address"><label for="f-address">Address</label><input type="text" id="f-address" maxlength="200"><label for="f-area">Area</label><input type="text" id="f-area" maxlength="60" placeholder="e.g. Port of Spain"></div>
+    <div class="panel" data-field="address"><label for="f-address">Address</label><input type="text" id="f-address" maxlength="200"><label for="f-area">Area</label><select id="f-area"></select></div>
     <div class="panel" data-field="hours"><label>Date &amp; time open</label><div id="hoursBox"></div><div class="hint" id="hoursNote"></div></div>
     <div class="panel" data-field="contact"><label for="f-phone">Business phone</label><input type="text" id="f-phone" maxlength="40"><label for="f-email">Business email</label><input type="text" id="f-email" maxlength="150"></div>
 
@@ -272,10 +275,21 @@
   </main>
 </div>
 
+<script src="/areas.js"></script>
 <script>
 const token = localStorage.getItem('ttp_token') || '';
 if (!token) location.href = '/account.html';
 const $ = id => document.getElementById(id);
+fillAreaSelect($('f-area'), 'Choose an area');
+$('switchBizBtn').addEventListener('click', async () => {
+  if (!confirm('Switch to a business account? You will be able to add and manage your business. You will stop getting area update emails on this account.')) return;
+  $('switchMsg').textContent = 'Switching...';
+  try {
+    const r = await fetch('/api/me/account-type', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': token }, body: JSON.stringify({ accountType: 'business' }) });
+    if (!r.ok){ const d = await r.json().catch(() => ({})); $('switchMsg').textContent = d.error || 'Could not switch right now.'; return; }
+    location.reload();
+  } catch (e) { $('switchMsg').textContent = 'Something went wrong. Please try again.'; }
+});
 const esc = s => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
 
 const ABOUT = [['accessibility','Accessibility'],['serviceOptions','Service options'],['popularFor','Popular for'],['offerings','Offerings'],['diningOptions','Dining options'],['atmosphere','Atmosphere'],['crowd','Crowd'],['payments','Payments'],['children','Children'],['parking','Parking']];
@@ -336,7 +350,7 @@ function selectBiz(id){
   $('f-tagline').value = biz.tagline || '';
   $('f-name').value = biz.name || ''; $('f-category').value = biz.category || '';
   $('f-description').value = biz.description || '';
-  $('f-address').value = biz.address || ''; $('f-area').value = biz.area || '';
+  $('f-address').value = biz.address || ''; setAreaValue($('f-area'), biz.area);
   $('f-phone').value = biz.phone || ''; $('f-email').value = biz.email || '';
   ['facebook','instagram','website'].forEach(k => $('f-' + k).value = (biz.social || {})[k] || '');
   $('aboutFields').innerHTML = ABOUT.map(([k, l]) => `<label for="a-${k}">${l}</label><input type="text" id="a-${k}" maxlength="200" value="${esc((biz.about || {})[k] || '')}">`).join('');

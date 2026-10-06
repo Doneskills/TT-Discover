@@ -534,6 +534,20 @@ app.post('/api/me/preferences', requireUser, async (req, res) => {
   }
 });
 
+// Lets a customer ("for updates") account become a business account with the same login.
+app.post('/api/me/account-type', requireUser, async (req, res) => {
+  if (!usersCol) return res.status(503).json({ error: 'Database not connected' });
+  try {
+    if (!req.body || req.body.accountType !== 'business') return res.status(400).json({ error: 'Only switching to a business account is supported.' });
+    if (req.user.accountType !== 'customer') return res.json({ ok: true, accountType: 'business' });
+    await usersCol.updateOne({ _id: req.user._id }, { $set: { accountType: 'business' } });
+    res.json({ ok: true, accountType: 'business' });
+  } catch (err) {
+    console.error('Account switch failed:', err.message);
+    res.status(500).json({ error: 'Could not switch account.' });
+  }
+});
+
 // Profile fields shared by both business and customer accounts.
 app.post('/api/me/profile', requireUser, async (req, res) => {
   if (!usersCol) return res.status(503).json({ error: 'Database not connected' });

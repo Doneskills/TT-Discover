@@ -495,7 +495,7 @@
             <label>Address</label>
             <input type="text" id="bAddress" placeholder="Street address, area">
             <label>Area</label>
-            <input type="text" id="bArea" placeholder="e.g. Arouca, San Fernando, Chaguanas">
+            <select id="bArea"></select>
           </div>
           <div class="studioField" data-group="locationinfo" data-field="hours">
             <div id="hoursSummary" class="hoursSummary">Tap to set hours for each day</div>
@@ -609,15 +609,19 @@
       <h2>🔔 You're following updates</h2>
       <p style="font-size:14px;line-height:1.5;">You'll be the first to know when new businesses and deals get added near you. No listing to manage — just sit back and browse.</p>
       <label>Area you care about most</label>
-      <select id="custArea">
-        <option value="Port of Spain">Port of Spain</option>
-      </select>
+      <select id="custArea"></select>
       <button id="custSaveBtn" style="margin-top:10px;">Save</button>
       <div class="msg" id="custMsg"></div>
     </div>
     <div class="card">
       <h2>Settings</h2>
       <p>Signed in as <b id="custEmail"></b></p>
+      <div style="margin:14px 0;padding:12px 14px;border:1px solid var(--border);border-radius:10px;">
+        <b style="font-size:14px;">Have a business?</b>
+        <p style="font-size:13px;line-height:1.5;margin:6px 0 10px;">Switch this account to a business account to put your business on TT Discover. You keep the same email and password.</p>
+        <button id="switchToBizBtn">Switch to a business account</button>
+        <div class="msg" id="switchMsg"></div>
+      </div>
       <button class="secondary" id="custLogoutBtn">Log Out</button>
     </div>
   </div>
@@ -646,6 +650,7 @@
   </div>
 </div>
 
+<script src="/areas.js"></script>
 <script>
 let token = localStorage.getItem('ttp_token') || '';
 let currentBizId = null;
@@ -1584,6 +1589,24 @@ document.getElementById('custLogoutBtn').addEventListener('click', () => {
   showView('auth');
 });
 
+document.getElementById('switchToBizBtn').addEventListener('click', async () => {
+  if (!confirm('Switch to a business account? You will be able to add and manage your business. You will stop getting area update emails on this account.')) return;
+  const msg = document.getElementById('switchMsg');
+  msg.textContent = 'Switching...';
+  try {
+    const res = await fetch('/api/me/account-type', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+      body: JSON.stringify({ accountType: 'business' })
+    });
+    if (!res.ok){ const d = await res.json().catch(() => ({})); msg.textContent = d.error || 'Could not switch right now.'; return; }
+    msg.textContent = '';
+    await enterApp();
+  } catch (err) {
+    msg.textContent = 'Something went wrong. Please try again.';
+  }
+});
+
 document.getElementById('custSaveBtn').addEventListener('click', async () => {
   const msg = document.getElementById('custMsg');
   msg.textContent = 'Saving...';
@@ -1593,7 +1616,12 @@ document.getElementById('custSaveBtn').addEventListener('click', async () => {
       headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
       body: JSON.stringify({ preferredArea: document.getElementById('custArea').value })
     });
-    msg.textContent = res.ok ? 'Saved!' : 'Could not save right now.';
+    if (res.ok){
+      msg.textContent = 'Saved! Taking you to the home page...';
+      setTimeout(() => { window.location.href = '/'; }, 700);
+    } else {
+      msg.textContent = 'Could not save right now.';
+    }
   } catch (err) {
     msg.textContent = 'Something went wrong saving — please try again.';
   }
@@ -1641,7 +1669,7 @@ function populateStudioForm(biz){
   document.getElementById('bCategory').value = biz.category || '';
   document.getElementById('bDescription').value = biz.description || '';
   document.getElementById('bAddress').value = biz.address || '';
-  document.getElementById('bArea').value = biz.area || '';
+  setAreaValue(document.getElementById('bArea'), biz.area);
   document.getElementById('bPhone').value = biz.phone || '';
   document.getElementById('bEmail').value = biz.email || '';
   document.getElementById('bImageUrl').value = '';
@@ -2236,6 +2264,9 @@ let myEmail = '';
 let myUserId = '';
 let currentBizIsOwner = true;
 
+fillAreaSelect(document.getElementById('custArea'));
+fillAreaSelect(document.getElementById('bArea'), 'Choose an area');
+
 async function enterApp(){
   const res = await fetch('/api/me', { headers: { 'x-auth-token': token } });
   if (!res.ok){ showView('auth'); return; }
@@ -2247,7 +2278,7 @@ async function enterApp(){
 
   if (data.accountType === 'customer'){
     document.getElementById('custEmail').textContent = data.email;
-    if (data.preferredArea) document.getElementById('custArea').value = data.preferredArea;
+    if (data.preferredArea) setAreaValue(document.getElementById('custArea'), data.preferredArea);
     showView('customer');
     return;
   }
