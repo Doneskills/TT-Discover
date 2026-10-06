@@ -30,6 +30,12 @@
   .bizRow button {
     width: auto; margin: 0; padding: 6px 12px; background: #7a2c2c; font-size: 12px;
   }
+  .repItem { border: 1px solid #4a3a28; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; font-size: 13px; }
+  .repItem .why { color: #f2a33c; font-weight: 700; }
+  .repItem img { max-width: 140px; border-radius: 6px; display: block; margin: 6px 0; }
+  .repItem .acts { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
+  .repItem .acts button { width: auto; margin: 0; padding: 6px 12px; font-size: 12px; }
+  .repItem .acts .quiet { background: #3a2e21; }
   hr { border: none; border-top: 1px solid #3a2e21; margin: 24px 0; }
   .dropZone {
     border: 2px dashed #4a3a28; border-radius: 10px; padding: 20px; text-align: center;
@@ -51,6 +57,9 @@
   </div>
 
   <div id="panel">
+    <h1 style="font-size:16px;">🚩 Reports <span id="repCount" style="color:#cbbfae;font-weight:400;"></span></h1>
+    <div id="repList"><div class="msg">Loading...</div></div>
+    <hr>
     <label>Business Name</label>
     <input type="text" id="name">
     <label>Description</label>
@@ -155,6 +164,7 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
     document.getElementById('loginBox').style.display = 'none';
     document.getElementById('panel').style.display = 'block';
     loadList();
+    loadReports();
   } else {
     document.getElementById('loginMsg').textContent = 'Incorrect password.';
   }
@@ -192,6 +202,51 @@ document.getElementById('addBtn').addEventListener('click', async () => {
     document.getElementById('addMsg').textContent = 'Could not add business.';
   }
 });
+
+
+async function loadReports(){
+  const box = document.getElementById('repList');
+  let list = [];
+  try {
+    const res = await fetch('/api/admin/reports', { headers: { 'x-admin-password': adminPassword } });
+    list = res.ok ? await res.json() : [];
+  } catch (e) { list = []; }
+  document.getElementById('repCount').textContent = list.length ? '(' + list.length + ' open)' : '';
+  box.innerHTML = '';
+  if (!list.length){ box.innerHTML = '<div class="msg">No open reports. 🎉</div>'; return; }
+  list.forEach(r => {
+    const d = document.createElement('div'); d.className = 'repItem';
+    const head = document.createElement('div');
+    head.innerHTML = '<span class="why"></span> · <span class="what"></span>';
+    head.querySelector('.why').textContent = r.reason;
+    head.querySelector('.what').textContent = r.type + ' on "' + (r.bizName || 'deleted business') + '"';
+    d.appendChild(head);
+    if (r.preview){ const p = document.createElement('div'); p.textContent = r.preview; d.appendChild(p); }
+    if (r.imageUrl){ const im = document.createElement('img'); im.src = r.imageUrl; d.appendChild(im); }
+    if (r.details){ const n = document.createElement('div'); n.style.color = '#cbbfae'; n.textContent = 'Note: ' + r.details; d.appendChild(n); }
+    const who = document.createElement('div'); who.style.color = '#8a7a68'; who.textContent = 'Reported by ' + r.reporterEmail + ' on ' + new Date(r.createdAt).toLocaleDateString(); d.appendChild(who);
+    if (r.gone){ const g = document.createElement('div'); g.style.color = '#f2a33c'; g.textContent = 'This content is already gone.'; d.appendChild(g); }
+    const acts = document.createElement('div'); acts.className = 'acts';
+    if (r.type !== 'business' && !r.gone){
+      const rm = document.createElement('button'); rm.textContent = 'Remove ' + r.type;
+      rm.addEventListener('click', async () => {
+        if (!confirm('Remove this ' + r.type + ' for good?')) return;
+        await fetch('/api/admin/reports/' + r._id + '/remove', { method: 'POST', headers: { 'x-admin-password': adminPassword } });
+        loadReports();
+      });
+      acts.appendChild(rm);
+    }
+    const dis = document.createElement('button'); dis.className = 'quiet'; dis.textContent = 'Dismiss';
+    dis.addEventListener('click', async () => {
+      await fetch('/api/admin/reports/' + r._id + '/dismiss', { method: 'POST', headers: { 'x-admin-password': adminPassword } });
+      loadReports();
+    });
+    acts.appendChild(dis);
+    if (r.bizId && !r.gone){ const a = document.createElement('a'); a.href = '/biz/' + r.bizId; a.target = '_blank'; a.textContent = 'View business ↗'; a.style.cssText = 'font-size:12px;color:#f2a33c;text-decoration:none;'; acts.appendChild(a); }
+    d.appendChild(acts);
+    box.appendChild(d);
+  });
+}
 
 async function loadList(){
   const res = await fetch('/api/businesses');

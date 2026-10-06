@@ -287,6 +287,8 @@
 
 <div class="wrap" id="app">
 
+  <div id="verifyBanner" role="status" style="display:none;margin:0 0 14px;padding:10px 14px;border-radius:10px;background:#fff3cd;color:#5a4400;font-size:13px;line-height:1.5;"></div>
+
   <div id="loadingView" style="display:block;text-align:center;padding:60px 20px;color:#aaa;font-size:14px;">Loading...</div>
 
   <div id="authView" style="display:none;">
@@ -301,6 +303,7 @@
         <label>Password</label>
         <input type="password" id="loginPassword">
         <button id="loginBtn">Log In</button>
+        <p style="text-align:center;font-size:13px;margin-top:12px;"><a href="#" id="forgotLink">Forgot password?</a></p>
       </div>
       <div id="signupForm" style="display:none;">
         <label>I'm signing up as</label>
@@ -313,6 +316,19 @@
         <label>Password (6+ characters)</label>
         <input type="password" id="signupPassword">
         <button id="signupBtn">Create Account</button>
+        <p style="font-size:12px;color:var(--text-muted2);margin-top:10px;line-height:1.5;">By creating an account you agree to our <a href="/terms.html" target="_blank" rel="noopener">Terms</a> and <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>
+      </div>
+      <div id="forgotForm" style="display:none;">
+        <h2 style="margin-bottom:8px;font-size:18px;">Reset your password</h2>
+        <p style="font-size:13px;color:var(--text-muted2);margin-bottom:10px;">Enter your email and we'll send you a link to choose a new password.</p>
+        <label>Email</label><input type="email" id="forgotEmail">
+        <button id="forgotBtn">Send reset link</button>
+        <p style="text-align:center;font-size:13px;margin-top:12px;"><a href="#" id="forgotBack">← Back to log in</a></p>
+      </div>
+      <div id="resetForm" style="display:none;">
+        <h2 style="margin-bottom:8px;font-size:18px;">Choose a new password</h2>
+        <label>New password (6+ characters)</label><input type="password" id="resetPassword">
+        <button id="resetBtn">Save new password</button>
       </div>
       <div class="msg" id="authMsg"></div>
     </div>
@@ -1215,6 +1231,45 @@ document.getElementById('signupBtn').addEventListener('click', async () => {
   if (res.ok){ token = data.token; localStorage.setItem('ttp_token', token); enterApp(); }
   else document.getElementById('authMsg').textContent = data.error || 'Could not sign up.';
 });
+
+
+// ---------------- Forgot / reset password, verification messages ----------------
+function showAuthPanel(which){
+  ['loginForm','signupForm','forgotForm','resetForm'].forEach(id => document.getElementById(id).style.display = id === which ? 'block' : 'none');
+  document.querySelector('#authView .tabRow').style.display = (which === 'forgotForm' || which === 'resetForm') ? 'none' : 'flex';
+  document.getElementById('authMsg').textContent = '';
+}
+document.getElementById('forgotLink').addEventListener('click', (e) => { e.preventDefault(); showAuthPanel('forgotForm'); });
+document.getElementById('forgotBack').addEventListener('click', (e) => { e.preventDefault(); showAuthPanel('loginForm'); });
+document.getElementById('forgotBtn').addEventListener('click', async () => {
+  const email = document.getElementById('forgotEmail').value.trim();
+  const msg = document.getElementById('authMsg');
+  if (!email){ msg.textContent = 'Enter your email first.'; return; }
+  await fetch('/api/forgot-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }).catch(() => {});
+  msg.textContent = 'If that email has an account, a reset link is on its way. Check your inbox (and spam).';
+});
+const urlParams = new URLSearchParams(window.location.search);
+const resetToken = urlParams.get('reset');
+document.getElementById('resetBtn').addEventListener('click', async () => {
+  const msg = document.getElementById('authMsg');
+  const password = document.getElementById('resetPassword').value;
+  const res = await fetch('/api/reset-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: resetToken, password }) });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok){ token = data.token; localStorage.setItem('ttp_token', token); window.history.replaceState({}, '', '/account.html'); enterApp(); }
+  else msg.textContent = data.error || 'Could not reset password.';
+});
+function showVerifyBanner(data){
+  const b = document.getElementById('verifyBanner');
+  if (!(data.verificationRequired && data.emailVerified === false)){ b.style.display = 'none'; return; }
+  b.innerHTML = 'Please confirm your email (<b>' + (data.email || '') + '</b>) to create businesses, review and add photos. <a href="#" id="resendVerify">Send the email again</a>';
+  b.style.display = 'block';
+  document.getElementById('resendVerify').addEventListener('click', async (e) => {
+    e.preventDefault();
+    const r = await fetch('/api/resend-verification', { method: 'POST', headers: { 'x-auth-token': token } });
+    const d = await r.json().catch(() => ({}));
+    b.textContent = r.ok ? 'Email sent. Check your inbox (and spam).' : (d.error || 'Could not send the email.');
+  });
+}
 
 // ---------------- Staff login & dashboard ----------------
 let staffToken = localStorage.getItem('ttp_staff_token') || '';
@@ -2188,6 +2243,7 @@ async function enterApp(){
   myPlan = data.plan;
   myEmail = data.email;
   myUserId = data.id;
+  showVerifyBanner(data);
 
   if (data.accountType === 'customer'){
     document.getElementById('custEmail').textContent = data.email;
@@ -2303,9 +2359,16 @@ async function setupPaypalButton(){
   document.body.appendChild(script);
 }
 
-if (staffToken) enterStaffApp();
+if (resetToken){ showView('auth'); showAuthPanel('resetForm'); }
+else if (staffToken) enterStaffApp();
 else if (token) enterApp();
 else showView('auth');
+if (urlParams.get('verified') === '1' || urlParams.get('verified') === '0'){
+  const b = document.getElementById('verifyBanner');
+  b.style.display = 'block';
+  b.textContent = urlParams.get('verified') === '1' ? 'Thanks! Your email is confirmed.' : 'That confirmation link is invalid or has expired. Log in and choose "Send the email again".';
+  window.history.replaceState({}, '', '/account.html');
+}
 </script>
 </body>
 </html>

@@ -6,6 +6,7 @@ const nodemailer = require('nodemailer');
 const { MongoClient, ObjectId } = require('mongodb');
 
 const app = express();
+app.set('trust proxy', 1); // so req.ip is the real visitor on Render
 app.use(express.json({ limit: '25mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -29,7 +30,8 @@ const MAIL_FROM = process.env.SMTP_FROM || 'TT Discover <notifications@ttdiscove
 
 async function sendMail(to, subject, html){
   if (!mailTransporter){
-    console.log(`[email not sent — no SMTP configured] To: ${to} | Subject: ${subject}`);
+    const links = (String(html).match(/href="([^"]+)"/g) || []).map(h => h.slice(6, -1));
+    console.log(`[email not sent — no SMTP configured] To: ${to} | Subject: ${subject}${links.length ? ' | Link: ' + links.join(' ') : ''}`);
     return;
   }
   try {
@@ -84,9 +86,46 @@ function sanitizeSocial(obj){
   return clean;
 }
 
+
+// ---------------- Safety helpers: rate limits, tokens, verification ----------------
+const rateBuckets = new Map();
+function rateCheck(key, max, windowMs){ // counts one hit; true while still under the limit
+  const now = Date.now();
+  let b = rateBuckets.get(key);
+  if (!b || b.reset < now) b = { count: 0, reset: now + windowMs };
+  b.count++;
+  rateBuckets.set(key, b);
+  return b.count <= max;
+}
+function rateBlocked(key, max){ const b = rateBuckets.get(key); return !!(b && b.reset > Date.now() && b.count >= max); }
+function rateClear(key){ rateBuckets.delete(key); }
+setInterval(() => { const now = Date.now(); for (const [k, b] of rateBuckets) if (b.reset < now) rateBuckets.delete(k); }, 10 * 60 * 1000).unref();
+
+function escapeRegex(s){ return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+const sha256 = s => crypto.createHash('sha256').update(String(s)).digest('hex');
+function siteUrl(req){ return (process.env.SITE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, ''); }
+
+async function issueVerifyToken(req, userId, email){
+  const raw = crypto.randomBytes(24).toString('hex');
+  await usersCol.updateOne({ _id: userId }, { $set: { verifyTokenHash: sha256(raw), verifyExpires: new Date(Date.now() + 48 * 60 * 60 * 1000) } });
+  const link = `${siteUrl(req)}/api/verify-email?token=${raw}`;
+  sendMail(email, 'Confirm your email for TT Discover',
+    `<p>Welcome to TT Discover!</p><p><a href="${link}">Confirm my email</a></p><p>This link works for 48 hours. If you didn't create an account, you can ignore this email.</p>`);
+}
+
+// Only enforced once email sending is set up (SMTP), otherwise nobody could ever verify.
+// Accounts created before this feature have no emailVerified flag and are treated as verified.
+function requireVerified(req, res, next){
+  if (mailTransporter && req.user && req.user.emailVerified === false){
+    return res.status(403).json({ error: 'Please confirm your email first. Check your inbox (and spam) for our message.', needsVerification: true });
+  }
+  next();
+}
+
 let businessesCol = null;
 let usersCol = null;
 let photosCol = null;
+let reportsCol = null;
 
 // ---------------- Weekly hours (Mon-Sun open/close per day) ----------------
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -150,6 +189,7 @@ async function initDb(){
     businessesCol = db.collection('businesses');
     usersCol = db.collection('users');
     photosCol = db.collection('photoUploads');
+    reportsCol = db.collection('reports');
     console.log('Connected to database.');
   } catch (err) {
     console.error('Database connection failed:', err.message);
@@ -238,7 +278,7 @@ function requireBizPermission(permission){
 app.get('/api/businesses', async (req, res) => {
   if (!businessesCol) return res.json([]);
   try {
-    const q = (req.query.q || '').trim();
+    const q = escapeRegex(String(req.query.q || '').trim().slice(0, 60));
     const matchStage = q
       ? { $match: { $or: [
           { name: { $regex: q, $options: 'i' } },
@@ -358,6 +398,7 @@ app.get('/biz/:id', async (req, res) => {
 app.post('/api/signup', async (req, res) => {
   if (!usersCol) return res.status(503).json({ error: 'Database not connected' });
   try {
+    if (!rateCheck('signup-ip:' + req.ip, 10, 60 * 60 * 1000)) return res.status(429).json({ error: 'Too many sign-ups from this connection. Please try again later.' });
     const email = String((req.body && req.body.email) || '').trim().toLowerCase();
     const password = String((req.body && req.body.password) || '');
     const accountType = req.body && req.body.accountType === 'customer' ? 'customer' : 'business';
@@ -368,7 +409,9 @@ app.post('/api/signup', async (req, res) => {
     if (existing) return res.status(400).json({ error: 'An account with that email already exists.' });
     const passwordHash = await bcrypt.hash(password, 10);
     const sessionToken = crypto.randomBytes(24).toString('hex');
-    await usersCol.insertOne({ email, passwordHash, sessionToken, accountType, createdAt: new Date() });
+    // Email confirmation only starts once email sending is set up; before that nobody could confirm.
+    const created = await usersCol.insertOne({ email, passwordHash, sessionToken, accountType, ...(mailTransporter ? { emailVerified: false } : {}), createdAt: new Date() });
+    if (mailTransporter) issueVerifyToken(req, created.insertedId, email).catch(() => {});
     res.json({ token: sessionToken, email });
   } catch (err) {
     console.error('Signup failed:', err.message);
@@ -381,16 +424,79 @@ app.post('/api/login', async (req, res) => {
   try {
     const email = String((req.body && req.body.email) || '').trim().toLowerCase();
     const password = String((req.body && req.body.password) || '');
+    const ipKey = 'login-ip:' + req.ip, emailKey = 'login:' + email;
+    if (rateBlocked(ipKey, 30) || rateBlocked(emailKey, 8)) return res.status(429).json({ error: 'Too many attempts. Please wait 15 minutes and try again.' });
     const user = await usersCol.findOne({ email });
-    if (!user) return res.status(401).json({ error: 'Incorrect email or password.' });
-    const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) return res.status(401).json({ error: 'Incorrect email or password.' });
+    const ok = user && await bcrypt.compare(password, user.passwordHash);
+    if (!ok){
+      rateCheck(ipKey, 30, 15 * 60 * 1000); rateCheck(emailKey, 8, 15 * 60 * 1000);
+      return res.status(401).json({ error: 'Incorrect email or password.' });
+    }
+    rateClear(emailKey);
     const sessionToken = crypto.randomBytes(24).toString('hex');
     await usersCol.updateOne({ _id: user._id }, { $set: { sessionToken } });
     res.json({ token: sessionToken, email: user.email });
   } catch (err) {
     console.error('Login failed:', err.message);
     res.status(500).json({ error: 'Could not log in.' });
+  }
+});
+
+
+// ---------------- Email verification and password reset ----------------
+app.get('/api/verify-email', async (req, res) => {
+  try {
+    const raw = String(req.query.token || '');
+    if (!raw || !usersCol) return res.redirect('/account.html?verified=0');
+    const user = await usersCol.findOne({ verifyTokenHash: sha256(raw), verifyExpires: { $gt: new Date() } });
+    if (!user) return res.redirect('/account.html?verified=0');
+    await usersCol.updateOne({ _id: user._id }, { $set: { emailVerified: true }, $unset: { verifyTokenHash: '', verifyExpires: '' } });
+    res.redirect('/account.html?verified=1');
+  } catch (err) {
+    res.redirect('/account.html?verified=0');
+  }
+});
+
+app.post('/api/resend-verification', requireUser, async (req, res) => {
+  if (req.user.emailVerified !== false) return res.json({ ok: true, alreadyVerified: true });
+  if (!rateCheck('resend:' + req.user._id.toString(), 3, 60 * 60 * 1000)) return res.status(429).json({ error: 'Please wait a bit before asking for another email.' });
+  await issueVerifyToken(req, req.user._id, req.user.email);
+  res.json({ ok: true });
+});
+
+app.post('/api/forgot-password', async (req, res) => {
+  res.json({ ok: true }); // same answer whether or not the email exists
+  try {
+    const email = String((req.body && req.body.email) || '').trim().toLowerCase();
+    if (!email || !usersCol) return;
+    if (!rateCheck('fp-ip:' + req.ip, 10, 60 * 60 * 1000) || !rateCheck('fp:' + email, 3, 60 * 60 * 1000)) return;
+    const user = await usersCol.findOne({ email });
+    if (!user) return;
+    const raw = crypto.randomBytes(24).toString('hex');
+    await usersCol.updateOne({ _id: user._id }, { $set: { resetTokenHash: sha256(raw), resetExpires: new Date(Date.now() + 60 * 60 * 1000) } });
+    const link = `${siteUrl(req)}/account.html?reset=${raw}`;
+    sendMail(email, 'Reset your TT Discover password',
+      `<p>We got a request to reset your password.</p><p><a href="${link}">Choose a new password</a></p><p>This link works for 1 hour. If you didn't ask for this, you can ignore this email and your password stays the same.</p>`);
+  } catch (err) {
+    console.error('Forgot password failed:', err.message);
+  }
+});
+
+app.post('/api/reset-password', async (req, res) => {
+  if (!usersCol) return res.status(503).json({ error: 'Database not connected' });
+  try {
+    if (!rateCheck('rp-ip:' + req.ip, 20, 60 * 60 * 1000)) return res.status(429).json({ error: 'Too many attempts. Please try again later.' });
+    const raw = String((req.body && req.body.token) || '');
+    const password = String((req.body && req.body.password) || '');
+    if (password.length < 6) return res.status(400).json({ error: 'Choose a password of at least 6 characters.' });
+    const user = raw && await usersCol.findOne({ resetTokenHash: sha256(raw), resetExpires: { $gt: new Date() } });
+    if (!user) return res.status(400).json({ error: 'This reset link is invalid or has expired. Please ask for a new one.' });
+    const passwordHash = await bcrypt.hash(password, 10);
+    const sessionToken = crypto.randomBytes(24).toString('hex'); // signs out any other devices
+    await usersCol.updateOne({ _id: user._id }, { $set: { passwordHash, sessionToken, emailVerified: true }, $unset: { resetTokenHash: '', resetExpires: '' } });
+    res.json({ token: sessionToken, email: user.email });
+  } catch (err) {
+    res.status(500).json({ error: 'Could not reset password.' });
   }
 });
 
@@ -404,6 +510,8 @@ app.get('/api/me', requireUser, async (req, res) => {
     id: user._id.toString(),
     email: user.email,
     accountType: user.accountType === 'customer' ? 'customer' : 'business',
+    emailVerified: user.emailVerified !== false,
+    verificationRequired: !!mailTransporter,
     preferredArea: user.preferredArea || null,
     plan: user.plan || 'free',
     premiumMethod: user.premiumMethod || null,
@@ -452,6 +560,7 @@ const PREMIUM_WIPAY_DAYS = 90;
 app.post('/api/premium/wipay/start', requireUser, async (req, res) => {
   try {
     const orderId = 'PREM-' + req.user._id.toString() + '-' + Date.now();
+    await usersCol.updateOne({ _id: req.user._id }, { $set: { wipayPending: { orderId, total: PREMIUM_WIPAY_PRICE_TTD, at: new Date() } } });
     const baseUrl = `${req.protocol}://${req.get('host')}`;
     // Best-effort based on WiPay's documented hosted-checkout flow — exact field names
     // may need a small adjustment once tested against real WiPay sandbox credentials.
@@ -473,21 +582,37 @@ app.post('/api/premium/wipay/start', requireUser, async (req, res) => {
   }
 });
 
+// WiPay sends the customer back here after paying. Anyone can open this URL, so we only
+// upgrade when the response carries a valid signature from WiPay (hash = md5 of
+// transaction_id + total + our API key, as described in WiPay's docs) AND matches an
+// order this user really started. IMPORTANT: confirm this against WiPay's sandbox before
+// relying on it — if the signature format differs, upgrades are refused (safe), not granted.
 app.get('/api/premium/wipay/return', async (req, res) => {
-  const { order_id, status } = req.query;
-  if (status === 'success' && order_id && usersCol){
-    const userId = String(order_id).split('-')[1];
-    try {
-      const expires = new Date(Date.now() + PREMIUM_WIPAY_DAYS * 24 * 60 * 60 * 1000);
-      await usersCol.updateOne(
-        { _id: new ObjectId(userId) },
-        { $set: { plan: 'premium', premiumMethod: 'wipay', premiumExpiresAt: expires } }
-      );
-    } catch (err) {
-      console.error('WiPay confirm failed:', err.message);
+  const { order_id, status, transaction_id, total, hash } = req.query;
+  let ok = false;
+  try {
+    const apiKey = process.env.WIPAY_API_KEY || '';
+    if (status === 'success' && order_id && transaction_id && total && hash && apiKey && usersCol){
+      const expected = crypto.createHash('md5').update(String(transaction_id) + String(total) + apiKey).digest('hex');
+      const a = Buffer.from(String(hash).toLowerCase()), b = Buffer.from(expected);
+      const signed = a.length === b.length && crypto.timingSafeEqual(a, b);
+      const userId = String(order_id).split('-')[1];
+      const user = signed && await usersCol.findOne({ _id: new ObjectId(userId) });
+      const pending = user && user.wipayPending;
+      if (pending && pending.orderId === String(order_id) && Number(total) === Number(pending.total)){
+        const expires = new Date(Date.now() + PREMIUM_WIPAY_DAYS * 24 * 60 * 60 * 1000);
+        await usersCol.updateOne({ _id: user._id }, { $set: { plan: 'premium', premiumMethod: 'wipay', premiumExpiresAt: expires }, $unset: { wipayPending: '' } });
+        ok = true;
+      } else {
+        console.log('WiPay return refused: signature or order did not match for', order_id);
+      }
+    } else {
+      console.log('WiPay return ignored: missing or unsigned details for', order_id);
     }
+  } catch (err) {
+    console.error('WiPay confirm failed:', err.message);
   }
-  res.redirect('/account.html?premium=' + (status === 'success' ? 'success' : 'failed'));
+  res.redirect('/account.html?premium=' + (ok ? 'success' : 'failed'));
 });
 
 app.get('/api/paypal/config', (req, res) => {
@@ -509,36 +634,25 @@ async function paypalAccessToken(){
   return data.access_token;
 }
 
-// Handles PayPal's webhook notifications (cancellations, expirations, failed renewals, etc.)
-// Note: this does not yet verify PayPal's webhook signature — fine for sandbox testing,
-// but worth hardening before handling real live payments at scale.
+// Handles PayPal's webhook notifications (cancellations, expirations, renewals).
+// The message itself is never trusted: we only use it as a nudge, then ask PayPal directly
+// for the subscription's real status, so a faked message can't change anyone's plan.
 app.post('/api/paypal/webhook', async (req, res) => {
   res.sendStatus(200); // acknowledge quickly, PayPal expects a fast response
   try {
-    const eventType = req.body && req.body.event_type;
+    const eventType = String((req.body && req.body.event_type) || '');
     const subscriptionId = req.body && req.body.resource && req.body.resource.id;
-    if (!eventType || !subscriptionId || !usersCol) return;
-
-    const downgradeEvents = [
-      'BILLING.SUBSCRIPTION.CANCELLED',
-      'BILLING.SUBSCRIPTION.EXPIRED',
-      'BILLING.SUBSCRIPTION.SUSPENDED'
-    ];
-    const upgradeEvents = [
-      'BILLING.SUBSCRIPTION.ACTIVATED',
-      'BILLING.SUBSCRIPTION.RE-ACTIVATED'
-    ];
-
-    if (downgradeEvents.includes(eventType)){
+    if (!eventType.startsWith('BILLING.SUBSCRIPTION.') || !subscriptionId || !usersCol) return;
+    const token = await paypalAccessToken();
+    const resp = await fetch(`${PAYPAL_BASE}/v1/billing/subscriptions/${encodeURIComponent(String(subscriptionId))}`, { headers: { 'Authorization': 'Bearer ' + token } });
+    if (!resp.ok) return;
+    const sub = await resp.json();
+    if (sub.status === 'ACTIVE'){
+      await usersCol.updateOne({ paypalSubscriptionId: subscriptionId }, { $set: { plan: 'premium', premiumMethod: 'paypal', premiumExpiresAt: null } });
+    } else if (['CANCELLED', 'EXPIRED', 'SUSPENDED'].includes(sub.status)){
       await usersCol.updateOne({ paypalSubscriptionId: subscriptionId }, { $set: { plan: 'free' } });
-      console.log('PayPal webhook: downgraded subscription', subscriptionId, eventType);
-    } else if (upgradeEvents.includes(eventType)){
-      await usersCol.updateOne(
-        { paypalSubscriptionId: subscriptionId },
-        { $set: { plan: 'premium', premiumMethod: 'paypal', premiumExpiresAt: null } }
-      );
-      console.log('PayPal webhook: activated subscription', subscriptionId, eventType);
     }
+    console.log('PayPal webhook handled:', subscriptionId, eventType, '->', sub.status);
   } catch (err) {
     console.error('PayPal webhook handling failed:', err.message);
   }
@@ -546,14 +660,18 @@ app.post('/api/paypal/webhook', async (req, res) => {
 
 app.post('/api/premium/paypal/confirm', requireUser, async (req, res) => {
   try {
-    const subscriptionId = req.body && req.body.subscriptionId;
+    const subscriptionId = String((req.body && req.body.subscriptionId) || '').slice(0, 100);
     if (!subscriptionId) return res.status(400).json({ error: 'Missing subscription ID.' });
     const token = await paypalAccessToken();
-    const resp = await fetch(`${PAYPAL_BASE}/v1/billing/subscriptions/${subscriptionId}`, {
+    const resp = await fetch(`${PAYPAL_BASE}/v1/billing/subscriptions/${encodeURIComponent(subscriptionId)}`, {
       headers: { 'Authorization': 'Bearer ' + token }
     });
+    if (!resp.ok) return res.status(400).json({ error: 'Could not find that subscription.' });
     const sub = await resp.json();
     if (sub.status !== 'ACTIVE') return res.status(400).json({ error: 'Subscription is not active yet.' });
+    if (process.env.PAYPAL_PLAN_ID && sub.plan_id !== process.env.PAYPAL_PLAN_ID) return res.status(400).json({ error: 'That subscription is for a different plan.' });
+    const taken = await usersCol.findOne({ paypalSubscriptionId: subscriptionId, _id: { $ne: req.user._id } });
+    if (taken) return res.status(400).json({ error: 'That subscription is already linked to another account.' });
     await usersCol.updateOne(
       { _id: req.user._id },
       { $set: { plan: 'premium', premiumMethod: 'paypal', paypalSubscriptionId: subscriptionId, premiumExpiresAt: null } }
@@ -601,7 +719,7 @@ app.get('/api/businesses/:id/photos', async (req, res) => {
   } catch (err) { res.json([]); }
 });
 
-app.post('/api/businesses/:id/photos', requireUser, async (req, res) => {
+app.post('/api/businesses/:id/photos', requireUser, requireVerified, async (req, res) => {
   if (!photosCol || !businessesCol) return res.status(503).json({ error: 'Database not connected' });
   try {
     const url = String((req.body && req.body.url) || '');
@@ -634,7 +752,7 @@ app.delete('/api/businesses/:id/photos/:photoId', requireUser, async (req, res) 
 });
 
 const TEMPLATES = ['food', 'fabric'];
-app.post('/api/my/businesses', requireUser, requireBusinessAccount, async (req, res) => {
+app.post('/api/my/businesses', requireUser, requireVerified, requireBusinessAccount, async (req, res) => {
   if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
   try {
     const ownedCount = await businessesCol.countDocuments({ ownerId: req.user._id.toString() });
@@ -851,7 +969,7 @@ app.delete('/api/my/businesses/:id/jobs/:jobId', requireUser, requireBusinessAcc
 });
 
 // Reviews are public — anyone can leave one, no account required.
-app.post('/api/businesses/:id/reviews', requireUser, async (req, res) => {
+app.post('/api/businesses/:id/reviews', requireUser, requireVerified, async (req, res) => {
   if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
   try {
     const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
@@ -1034,11 +1152,16 @@ app.post('/api/staff/login', async (req, res) => {
     const email = String((req.body || {}).email || '').trim().toLowerCase();
     const password = String((req.body || {}).password || '');
     if (!email || !password) return res.status(400).json({ error: 'Email and password are required.' });
+    const ipKey = 'staff-ip:' + req.ip, emailKey = 'staff:' + email;
+    if (rateBlocked(ipKey, 30) || rateBlocked(emailKey, 8)) return res.status(429).json({ error: 'Too many attempts. Please wait 15 minutes and try again.' });
     const biz = await businessesCol.findOne({ 'staff.email': email });
-    if (!biz) return res.status(401).json({ error: 'Incorrect email or password.' });
-    const staffMember = (biz.staff || []).find(s => s.email === email);
+    const staffMember = biz && (biz.staff || []).find(s => s.email === email);
     const ok = staffMember && await bcrypt.compare(password, staffMember.passwordHash);
-    if (!ok) return res.status(401).json({ error: 'Incorrect email or password.' });
+    if (!ok){
+      rateCheck(ipKey, 30, 15 * 60 * 1000); rateCheck(emailKey, 8, 15 * 60 * 1000);
+      return res.status(401).json({ error: 'Incorrect email or password.' });
+    }
+    rateClear(emailKey);
     const sessionToken = crypto.randomBytes(24).toString('hex');
     await businessesCol.updateOne(
       { _id: biz._id, 'staff._id': staffMember._id },
@@ -1084,6 +1207,79 @@ app.post('/api/staff/logout', async (req, res) => {
 });
 
 // ---------------- Admin API (password protected) ----------------
+
+// ---------------- Reports (reviews, photos, businesses) ----------------
+const REPORT_REASONS = ['Spam or fake', 'Offensive or inappropriate', 'Wrong or misleading information', 'Other'];
+app.post('/api/reports', requireUser, async (req, res) => {
+  if (!reportsCol || !businessesCol) return res.status(503).json({ error: 'Database not connected' });
+  try {
+    const b = req.body || {};
+    const type = ['review', 'photo', 'business'].includes(b.type) ? b.type : '';
+    const bizId = String(b.bizId || '');
+    const targetId = type === 'business' ? bizId : String(b.targetId || '');
+    if (!type || !bizId || !targetId) return res.status(400).json({ error: 'Nothing to report.' });
+    const reporterId = req.user._id.toString();
+    if (!rateCheck('report:' + reporterId, 20, 24 * 60 * 60 * 1000)) return res.status(429).json({ error: 'You have sent a lot of reports today. Please try again tomorrow.' });
+    const biz = await businessesCol.findOne({ _id: new ObjectId(bizId) }, { projection: { name: 1, reviews: 1 } });
+    if (!biz) return res.status(404).json({ error: 'Business not found.' });
+    if (type === 'review' && !(biz.reviews || []).some(r => String(r._id) === targetId)) return res.status(404).json({ error: 'Review not found.' });
+    if (type === 'photo' && !(photosCol && await photosCol.findOne({ _id: new ObjectId(targetId), bizId }))) return res.status(404).json({ error: 'Photo not found.' });
+    const already = await reportsCol.findOne({ reporterId, type, bizId, targetId, status: 'open' });
+    if (!already){
+      const reason = REPORT_REASONS.includes(b.reason) ? b.reason : 'Other';
+      await reportsCol.insertOne({ type, bizId, targetId, reason, details: String(b.details || '').trim().slice(0, 500), reporterId, reporterEmail: req.user.email, status: 'open', createdAt: new Date() });
+      if (process.env.ADMIN_EMAIL) sendMail(process.env.ADMIN_EMAIL, 'New report on TT Discover', `<p>A ${type} on <b>${escapeHtml(biz.name)}</b> was reported: ${escapeHtml(reason)}.</p><p>Open the admin page to review it.</p>`);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: 'Could not send your report.' });
+  }
+});
+
+app.get('/api/admin/reports', requireAdmin, async (req, res) => {
+  if (!reportsCol) return res.json([]);
+  try {
+    const list = await reportsCol.find({ status: 'open' }).sort({ createdAt: -1 }).limit(100).toArray();
+    const out = [];
+    for (const r of list){
+      const item = { _id: r._id.toString(), type: r.type, bizId: r.bizId, reason: r.reason, details: r.details, reporterEmail: r.reporterEmail, createdAt: r.createdAt, bizName: '', preview: '', imageUrl: '', gone: false };
+      try {
+        const biz = await businessesCol.findOne({ _id: new ObjectId(r.bizId) }, { projection: { name: 1, reviews: 1 } });
+        item.bizName = biz ? biz.name : '';
+        if (!biz) item.gone = true;
+        else if (r.type === 'review'){
+          const rev = (biz.reviews || []).find(x => String(x._id) === r.targetId);
+          if (rev) item.preview = `${rev.authorName} (${rev.rating}★): ${rev.comment}`; else item.gone = true;
+        } else if (r.type === 'photo'){
+          const ph = await photosCol.findOne({ _id: new ObjectId(r.targetId) });
+          if (ph){ item.imageUrl = ph.url; item.preview = 'Photo by @' + (ph.username || 'customer'); } else item.gone = true;
+        }
+      } catch (e) { item.gone = true; }
+      out.push(item);
+    }
+    res.json(out);
+  } catch (err) { res.json([]); }
+});
+
+app.post('/api/admin/reports/:id/dismiss', requireAdmin, async (req, res) => {
+  try {
+    await reportsCol.updateOne({ _id: new ObjectId(req.params.id) }, { $set: { status: 'dismissed', closedAt: new Date() } });
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ error: 'Could not update report.' }); }
+});
+
+app.post('/api/admin/reports/:id/remove', requireAdmin, async (req, res) => {
+  try {
+    const r = await reportsCol.findOne({ _id: new ObjectId(req.params.id) });
+    if (!r) return res.status(404).json({ error: 'Report not found.' });
+    if (r.type === 'review') await businessesCol.updateOne({ _id: new ObjectId(r.bizId) }, { $pull: { reviews: { _id: new ObjectId(r.targetId) } } });
+    else if (r.type === 'photo') await photosCol.deleteOne({ _id: new ObjectId(r.targetId) });
+    else return res.status(400).json({ error: 'To remove a business, delete it from the listings list.' });
+    await reportsCol.updateMany({ type: r.type, bizId: r.bizId, targetId: r.targetId, status: 'open' }, { $set: { status: 'removed', closedAt: new Date() } });
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ error: 'Could not remove that.' }); }
+});
+
 app.post('/api/admin/check', requireAdmin, (req, res) => { res.json({ ok: true }); });
 
 app.post('/api/admin/businesses', requireAdmin, async (req, res) => {

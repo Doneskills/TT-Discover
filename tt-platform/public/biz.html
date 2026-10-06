@@ -67,6 +67,14 @@
   .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
   .grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .tile { position: relative; border-radius: 18px; overflow: hidden; aspect-ratio: 4/3; background: var(--divider); border-bottom: 7px solid var(--primary); cursor: zoom-in; }
+  .reportLink { background: none; border: none; color: var(--muted); font-size: 12px; text-decoration: underline; cursor: pointer; padding: 2px 0; margin-top: 4px; font-family: inherit; }
+  .reportForm { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; align-items: center; font-size: 13px; }
+  .reportForm select, .reportForm input { padding: 6px 8px; border-radius: 8px; border: 1px solid var(--fieldBorder); background: var(--field); color: var(--text); font-size: 13px; font-family: inherit; max-width: 100%; }
+  .reportForm input { flex: 1 1 160px; min-width: 0; }
+  .reportForm .btn { padding: 6px 12px; font-size: 13px; }
+  .reportRow { margin-top: 34px; font-size: 12px; color: var(--muted); }
+  .reportRow a { color: var(--muted); }
+  .fabric .reportRow.fab { padding: 0 44px 30px; }
   .delPhoto { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; padding: 0; border: none; border-radius: 50%; background: rgba(0,0,0,.65); color: #fff; font-size: 13px; cursor: pointer; }
   .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .cap { font-size: 14px; margin-top: 6px; }
@@ -272,7 +280,7 @@ function render(){
   const m = $('main');
   const inner = p === 'home' ? homeHtml() : p === 'menu' ? menuHtml() : p === 'reviews' ? reviewsHtml() : p === 'posts' ? postsHtml() : p === 'jobs' ? jobsHtml() : photosHtml();
   document.documentElement.classList.toggle('fabric', biz.template === 'fabric');
-  m.innerHTML = (biz.template === 'fabric' && p === 'home') ? inner : `<div class="pad">${inner}</div>`;
+  m.innerHTML = (biz.template === 'fabric' && p === 'home') ? inner + reportRowHtml() : `<div class="pad">${inner}${p === 'home' ? reportRowHtml() : ''}</div>`;
   window.scrollTo(0, 0);
   if (embed){
     m.querySelectorAll('a[href^="/"]').forEach(a => a.target = '_top');
@@ -407,7 +415,7 @@ let custPhotos = [], custLoaded = false, photoFilter = 'all';
 function ownerPhotoList(){ return [biz.imageUrl, ...(biz.photos || []), ...(biz.menuPhotos || []), ...(biz.highlights || [])].filter(Boolean); }
 function photosHtml(){
   const owner = ownerPhotoList().map(u => ({ url: u, by: '' }));
-  const cust = custPhotos.map(c => ({ url: c.url, by: c.username ? '@' + c.username : 'Customer', id: c._id, del: !!(me && (c.userId === me.id || isOwner())) }));
+  const cust = custPhotos.map(c => ({ url: c.url, by: c.username ? '@' + c.username : 'Customer', uid: c.userId, id: c._id, del: !!(me && (c.userId === me.id || isOwner())) }));
   const items = photoFilter === 'owner' ? owner : photoFilter === 'customers' ? cust : [...owner, ...cust];
   const chip = (k, l) => `<button type="button" class="btn pfilter ${photoFilter === k ? 'sel' : ''}" data-k="${k}">${l}</button>`;
   const add = previewMode ? '' : me
@@ -416,7 +424,7 @@ function photosHtml(){
   const fab = biz.template === 'fabric' && photoFilter === 'all' && owner.length;
   const feat = fab ? owner.slice(0, 3) : [];
   const rest = fab ? items.slice(feat.length) : items;
-  const tileHtml = i => `<div><div class="tile"><img src="${i.url}" alt="" loading="lazy">${i.del ? `<button type="button" class="delPhoto" data-id="${i.id}" aria-label="Remove photo">✕</button>` : ''}</div>${i.by ? `<div class="cap" style="font-size:12px;color:var(--muted)">${esc(i.by)}</div>` : ''}</div>`;
+  const tileHtml = i => `<div><div class="tile"><img src="${i.url}" alt="" loading="lazy">${i.del ? `<button type="button" class="delPhoto" data-id="${i.id}" aria-label="Remove photo">✕</button>` : ''}</div>${i.by ? `<div class="cap" style="font-size:12px;color:var(--muted)">${esc(i.by)}</div>` : ''}${i.id && !i.del ? reportBtn('photo', i.id, i.uid) : ''}</div>`;
   return `
     <h2 class="sec">Photos</h2><hr class="rule" style="margin-top:0">
     ${feat.length ? `<div class="grid">${feat.map(tileHtml).join('')}</div><hr class="rule" style="margin:22px 0 14px">` : ''}
@@ -459,6 +467,34 @@ function sortedReviews(){
   else list.sort((a, b) => (b.comment.length - a.comment.length) || (new Date(b.createdAt) - new Date(a.createdAt)));
   return list;
 }
+
+function reportBtn(type, target, contentUserId){
+  if (previewMode || (me && contentUserId && contentUserId === me.id)) return '';
+  return `<button type="button" class="reportLink" data-type="${type}" data-target="${esc(target || '')}">${type === 'business' ? 'Report this business' : 'Report'}</button>`;
+}
+function reportRowHtml(){
+  if (previewMode) return '';
+  return `<div class="reportRow${biz.template === 'fabric' ? ' fab' : ''}">${reportBtn('business', bizId)} · <a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a></div>`;
+}
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.reportLink');
+  if (!btn) return;
+  if (!me){ btn.outerHTML = '<span class="msg">Please <a href="/account.html" target="_top">sign in</a> to send a report.</span>'; return; }
+  const box = document.createElement('div');
+  box.className = 'reportForm';
+  box.innerHTML = '<select aria-label="Reason"><option>Spam or fake</option><option>Offensive or inappropriate</option><option>Wrong or misleading information</option><option>Other</option></select><input type="text" maxlength="500" placeholder="Anything else we should know? (optional)" aria-label="Details"><button type="button" class="btn sendReport">Send</button><button type="button" class="btn cancelReport">Cancel</button><span class="msg" role="status"></span>';
+  const type = btn.dataset.type, target = btn.dataset.target;
+  btn.replaceWith(box);
+  box.querySelector('.cancelReport').addEventListener('click', () => box.replaceWith(btn));
+  box.querySelector('.sendReport').addEventListener('click', async () => {
+    const msg = box.querySelector('.msg'); msg.textContent = 'Sending...';
+    const res = await fetch('/api/reports', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+      body: JSON.stringify({ type, bizId, targetId: target, reason: box.querySelector('select').value, details: box.querySelector('input').value }) });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) box.innerHTML = '<span style="color:var(--muted)">Thanks. We will take a look.</span>';
+    else msg.textContent = data.error || 'Could not send your report.';
+  });
+});
 function isOwner(){ return !previewMode && me && biz && biz.ownerId && biz.ownerId === me.id; }
 function wireReplies(){
   document.querySelectorAll('.replyBox').forEach(box => box.querySelector('.replyBtn').addEventListener('click', async () => {
@@ -478,7 +514,7 @@ function reviewListHtml(){
     <div class="review"><div class="avatar">${esc((r.authorName || '?')[0].toUpperCase())}</div>
       <div style="min-width:0"><div><span class="who">${esc(r.authorName)}</span><span class="when">${new Date(r.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span></div>
         ${starsHtml(r.rating)}<p>${esc(r.comment)}</p>
-        ${r.reply ? `<div class="reply"><b>Owner reply:</b> ${esc(typeof r.reply === 'string' ? r.reply : r.reply.text)}</div>` : (isOwner() ? `<div class="replyBox" data-id="${r._id}"><textarea placeholder="Reply as the business..." maxlength="500"></textarea><br><button type="button" class="btn replyBtn">Reply</button><span class="msg"></span></div>` : '')}</div></div>`).join('');
+        ${reportBtn('review', r._id, r.authorId)}${r.reply ? `<div class="reply"><b>Owner reply:</b> ${esc(typeof r.reply === 'string' ? r.reply : r.reply.text)}</div>` : (isOwner() ? `<div class="replyBox" data-id="${r._id}"><textarea placeholder="Reply as the business..." maxlength="500"></textarea><br><button type="button" class="btn replyBtn">Reply</button><span class="msg"></span></div>` : '')}</div></div>`).join('');
 }
 function reviewsHtml(){
   const r = ratingOf(biz), counts = [5,4,3,2,1].map(n => (biz.reviews || []).filter(x => x.rating === n).length);
