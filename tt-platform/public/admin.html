@@ -256,7 +256,9 @@ async function loadList(){
   list.forEach(biz => {
     const row = document.createElement('div');
     row.className = 'bizRow';
-    row.innerHTML = `<span>${biz.name}</span>`;
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = biz.name;
+    row.appendChild(nameSpan);
     const viewLink = document.createElement('a');
     viewLink.href = '/biz/' + biz._id;
     viewLink.target = '_blank';
