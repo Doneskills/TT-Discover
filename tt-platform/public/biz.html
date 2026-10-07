@@ -40,7 +40,7 @@
   .post { padding: 14px 0; border-bottom: 1px solid var(--divider); }
   .post .pd { font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
   .post img { max-width: 100%; border-radius: 12px; margin-top: 8px; cursor: zoom-in; }
-  .aboutRow { font-size: 14px; margin: 5px 0; } .aboutRow b { color: var(--primary); }
+  .aboutRow { font-size: 14px; margin: 5px 0; } .aboutRow b { color: var(--title); }
   .replyBox { margin-top: 8px; } .replyBox textarea { width: 100%; max-width: 480px; min-height: 52px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--fieldBorder); font-size: 13px; }
   .replyBox .btn { padding: 6px 14px; font-size: 13px; margin-top: 6px; }
   #previewBar { background: #232323; color: #fff; padding: 10px 16px; font-size: 14px; text-align: center; display: none; }
@@ -269,6 +269,17 @@ function hoursLines(h){
   return esc(ttCompactHours(h));
 }
 
+function showErr(el, data, fallback){
+  if (data && data.needsVerification){
+    el.innerHTML = 'You need to confirm your email before you can do this. This keeps fake reviews and spam photos off the site. Check your inbox (and spam) for our email, or <a href="#" class="resendLink" style="color:var(--title);font-weight:600">send it again</a>.';
+    el.querySelector('.resendLink').addEventListener('click', async e => {
+      e.preventDefault();
+      const r = await fetch('/api/resend-verification', { method: 'POST', headers: { 'x-auth-token': token } });
+      const d = await r.json().catch(() => ({}));
+      el.textContent = r.ok ? 'Email sent. Check your inbox (and spam), tap the link, then try again.' : (d.error || 'Could not send the email.');
+    });
+  } else el.textContent = (data && data.error) || fallback;
+}
 function route(){ const p = (location.hash || '#home').slice(1); return pages().some(x => x[0] === p) ? p : 'home'; }
 
 function paintShell(){
@@ -455,7 +466,7 @@ function wirePhotos(){
       const url = await shrink(f);
       const res = await fetch(`/api/businesses/${bizId}/photos`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': token }, body: JSON.stringify({ url }) });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok){ $('pmsg').textContent = data.error || 'Could not add your photo.'; return; }
+      if (!res.ok){ showErr($('pmsg'), data, 'Could not add your photo.'); return; }
       custPhotos = [data.photo, ...custPhotos]; photoFilter = 'customers'; render();
     });
   }
@@ -540,7 +551,7 @@ function reviewsHtml(){
       <div style="font-size:12px;color:var(--muted);margin-top:6px">Posting as ${me.username ? '@' + esc(me.username) : 'Anonymous — <a href="/profile.html">add a username</a>'}</div>
       <textarea class="cmt" id="cmt" maxlength="1000" placeholder="Share your experience..."></textarea><br>
       <button class="btn" type="button" id="submitReview" style="margin-top:8px">Submit review</button><div class="msg" id="rmsg" role="status"></div>`
-      : `<p style="font-size:14px"><a href="/account.html" style="color:var(--primary);font-weight:600">Sign in</a> to leave a review. Your username is shown with it.</p>`}
+      : `<p style="font-size:14px"><a href="/account.html" style="color:var(--title);font-weight:600">Sign in</a> to leave a review. Your username is shown with it.</p>`}
     <hr class="rule">
     <div class="tools"><button class="iconBtn" type="button" id="searchBtn" aria-label="Search reviews">🔍</button><input id="search" type="search" placeholder="Search reviews" aria-label="Search reviews">
       ${[['relevant','Most relevant'],['newest','Newest'],['highest','Highest'],['lowest','Lowest']].map(([k, l]) => `<button type="button" class="btn sortBtn ${k === sortMode ? 'sel' : ''}" data-k="${k}">${l}</button>`).join('')}</div>
@@ -567,7 +578,7 @@ function wireReviews(){
     msg.textContent = 'Submitting...';
     const res = await fetch(`/api/businesses/${bizId}/reviews`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': token }, body: JSON.stringify({ rating: pickRating, comment }) });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok){ msg.textContent = data.error || 'Could not submit review.'; return; }
+    if (!res.ok){ showErr(msg, data, 'Could not submit review.'); return; }
     biz.reviews = [data.review, ...(biz.reviews || [])];
     pickRating = 0; render();
   });

@@ -149,6 +149,7 @@ function requireVerified(req, res, next){
 let businessesCol = null;
 let usersCol = null;
 let photosCol = null;
+let invitesCol = null;
 let reportsCol = null;
 
 // ---------------- Weekly hours (Mon-Sun open/close per day) ----------------
@@ -213,6 +214,7 @@ async function initDb(){
     businessesCol = db.collection('businesses');
     usersCol = db.collection('users');
     photosCol = db.collection('photoUploads');
+    invitesCol = db.collection('collabInvites');
     reportsCol = db.collection('reports');
     console.log('Connected to database.');
   } catch (err) {
@@ -1154,27 +1156,119 @@ app.delete('/api/my/businesses/:id/staff/:staffId', requireUser, requireBusiness
 // A collaborator gets the same day-to-day access as the owner (edit info,
 // posts, jobs, deals, staff, review replies) but can't delete the business
 // or manage the collaborator list themselves — only the original owner can.
+// The owner sends an invitation. The other person gets an email with Accept / Cancel buttons and
+// is only added once they accept, so nobody is added without knowing.
+const INVITE_DAYS = 7;
 app.post('/api/my/businesses/:id/collaborators', requireUser, requireBusinessAccount, async (req, res) => {
-  if (!businessesCol || !usersCol) return res.status(503).json({ error: 'Database not connected' });
+  if (!businessesCol || !usersCol || !invitesCol) return res.status(503).json({ error: 'Database not connected' });
   try {
     const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
     if (!biz || biz.ownerId !== req.user._id.toString()){
       return res.status(403).json({ error: 'Only the original owner can manage collaborators.' });
     }
+    if (!rateCheck('invite:' + req.user._id.toString(), 10, 60 * 60 * 1000)) return res.status(429).json({ error: 'You have sent a lot of invitations. Please try again in a little while.' });
     const email = String((req.body || {}).email || '').trim().toLowerCase();
     if (!email || !email.includes('@')) return res.status(400).json({ error: 'A valid email is required.' });
     const found = await usersCol.findOne({ email, accountType: 'business' });
-    if (!found) return res.status(404).json({ error: 'No business account found with that email.' });
+    if (!found) return res.status(404).json({ error: 'No business account found with that email. They need a TT Discover business account first.' });
     const foundId = found._id.toString();
     if (foundId === biz.ownerId) return res.status(400).json({ error: "That's already the owner." });
     if ((biz.collaborators || []).some(c => c.userId === foundId)){
       return res.status(400).json({ error: 'That person is already a collaborator.' });
     }
-    const collaborator = { userId: foundId, email: found.email, addedAt: new Date() };
-    await businessesCol.updateOne({ _id: biz._id }, { $push: { collaborators: collaborator } });
-    res.json({ ok: true, collaborator });
+    // One open invitation per person per business: sending again replaces the old one.
+    await invitesCol.deleteMany({ bizId: biz._id.toString(), inviteeId: foundId, status: 'pending' });
+    const raw = crypto.randomBytes(24).toString('hex');
+    await invitesCol.insertOne({
+      bizId: biz._id.toString(), bizName: biz.name, inviterId: biz.ownerId, inviterEmail: req.user.email,
+      inviteeId: foundId, inviteeEmail: found.email, tokenHash: sha256(raw), status: 'pending',
+      createdAt: new Date(), expiresAt: new Date(Date.now() + INVITE_DAYS * 24 * 60 * 60 * 1000)
+    });
+    const link = `${siteUrl(req)}/invite.html?token=${raw}`;
+    const btn = 'display:inline-block;padding:12px 26px;border-radius:24px;font-weight:700;text-decoration:none;font-size:15px;';
+    sendMail(found.email, `${biz.name} invited you to help manage their page on TT Discover`,
+      `<div style="font-family:Segoe UI,Arial,sans-serif;max-width:480px;">
+         <h2 style="margin:0 0 10px;">You've been invited 🎉</h2>
+         <p><b>${escapeHtml(req.user.email)}</b> would like you to help manage <b>${escapeHtml(biz.name)}</b> on TT Discover.</p>
+         <p>As a collaborator you can edit the business info, photos, hours, posts, jobs and deals using your own account. Only the owner can delete the business or change collaborators.</p>
+         <p style="margin:22px 0;">
+           <a href="${link}&a=accept" style="${btn}background:#e0562f;color:#ffffff;">Accept</a>
+           &nbsp;
+           <a href="${link}&a=decline" style="${btn}background:#eeeeee;color:#333333;">Cancel</a>
+         </p>
+         <p style="font-size:13px;color:#777;">This invitation works for ${INVITE_DAYS} days. If you don't know this person, just ignore this email.</p>
+       </div>`);
+    res.json({ ok: true, pending: true, emailSent: !!mailTransporter });
   } catch (err) {
-    res.status(500).json({ error: 'Could not add collaborator.' });
+    console.error('Invite failed:', err.message);
+    res.status(500).json({ error: 'Could not send the invitation.' });
+  }
+});
+
+app.get('/api/my/businesses/:id/invites', requireUser, requireBusinessAccount, async (req, res) => {
+  if (!businessesCol || !invitesCol) return res.json([]);
+  try {
+    const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
+    if (!biz || biz.ownerId !== req.user._id.toString()) return res.status(403).json({ error: 'Only the original owner can manage collaborators.' });
+    const list = await invitesCol.find({ bizId: biz._id.toString(), status: 'pending', expiresAt: { $gt: new Date() } }).sort({ createdAt: -1 }).toArray();
+    res.json(list.map(i => ({ _id: i._id.toString(), email: i.inviteeEmail, createdAt: i.createdAt, expiresAt: i.expiresAt })));
+  } catch (err) { res.json([]); }
+});
+
+app.delete('/api/my/businesses/:id/invites/:inviteId', requireUser, requireBusinessAccount, async (req, res) => {
+  if (!businessesCol || !invitesCol) return res.status(503).json({ error: 'Database not connected' });
+  try {
+    const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
+    if (!biz || biz.ownerId !== req.user._id.toString()) return res.status(403).json({ error: 'Only the original owner can manage collaborators.' });
+    await invitesCol.deleteOne({ _id: new ObjectId(req.params.inviteId), bizId: biz._id.toString(), status: 'pending' });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Could not cancel the invitation.' }); }
+});
+
+// Public: the invitation page (opened from the email). The secret token in the link is the proof.
+app.get('/api/collab-invite/:token', async (req, res) => {
+  if (!invitesCol) return res.status(503).json({ error: 'Not available right now.' });
+  if (!rateCheck('invget:' + req.ip, 60, 10 * 60 * 1000)) return res.status(429).json({ error: 'Too many tries. Please wait a bit.' });
+  try {
+    const inv = await invitesCol.findOne({ tokenHash: sha256(req.params.token) });
+    if (!inv) return res.status(404).json({ error: 'This invitation link is not valid.' });
+    const status = inv.status === 'pending' && inv.expiresAt < new Date() ? 'expired' : inv.status;
+    res.json({ bizName: inv.bizName, inviterEmail: inv.inviterEmail, inviteeEmail: inv.inviteeEmail, status });
+  } catch (err) { res.status(404).json({ error: 'This invitation link is not valid.' }); }
+});
+
+app.post('/api/collab-invite/:token/respond', async (req, res) => {
+  if (!invitesCol || !businessesCol || !usersCol) return res.status(503).json({ error: 'Not available right now.' });
+  if (!rateCheck('invpost:' + req.ip, 30, 10 * 60 * 1000)) return res.status(429).json({ error: 'Too many tries. Please wait a bit.' });
+  try {
+    const action = (req.body || {}).action === 'accept' ? 'accept' : (req.body || {}).action === 'decline' ? 'decline' : '';
+    if (!action) return res.status(400).json({ error: 'Choose Accept or Cancel.' });
+    const inv = await invitesCol.findOne({ tokenHash: sha256(req.params.token) });
+    if (!inv) return res.status(404).json({ error: 'This invitation link is not valid.' });
+    if (inv.status !== 'pending') return res.status(400).json({ error: inv.status === 'accepted' ? 'You already accepted this invitation.' : 'This invitation was already answered or cancelled.' });
+    if (inv.expiresAt < new Date()) return res.status(400).json({ error: 'This invitation has expired. Ask the owner to send a new one.' });
+
+    if (action === 'accept'){
+      const user = await usersCol.findOne({ _id: new ObjectId(inv.inviteeId) });
+      if (!user || user.accountType !== 'business') return res.status(400).json({ error: 'Your account needs to be a business account first. Switch it in Settings, then open this link again.' });
+      const biz = await businessesCol.findOne({ _id: new ObjectId(inv.bizId) });
+      if (!biz) return res.status(404).json({ error: 'That business no longer exists.' });
+      const claimed = await invitesCol.updateOne({ _id: inv._id, status: 'pending' }, { $set: { status: 'accepted', answeredAt: new Date() } });
+      if (!claimed.modifiedCount) return res.status(400).json({ error: 'This invitation was already answered.' });
+      if (!(biz.collaborators || []).some(c => c.userId === inv.inviteeId)){
+        await businessesCol.updateOne({ _id: biz._id }, { $push: { collaborators: { userId: inv.inviteeId, email: inv.inviteeEmail, addedAt: new Date() } } });
+      }
+    } else {
+      const claimed = await invitesCol.updateOne({ _id: inv._id, status: 'pending' }, { $set: { status: 'declined', answeredAt: new Date() } });
+      if (!claimed.modifiedCount) return res.status(400).json({ error: 'This invitation was already answered.' });
+    }
+    // Let the owner know what happened.
+    sendMail(inv.inviterEmail, `${inv.inviteeEmail} ${action === 'accept' ? 'accepted' : 'declined'} your invitation`,
+      `<p><b>${escapeHtml(inv.inviteeEmail)}</b> ${action === 'accept' ? 'accepted your invitation and can now help manage' : 'declined your invitation to help manage'} <b>${escapeHtml(inv.bizName)}</b>.</p>`);
+    res.json({ ok: true, action, bizName: inv.bizName });
+  } catch (err) {
+    console.error('Invite response failed:', err.message);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 

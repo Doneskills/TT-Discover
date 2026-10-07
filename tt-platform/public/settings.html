@@ -265,8 +265,9 @@
 
     <div class="panel" data-field="collab">
       <p class="toolNote">A collaborator gets full access to edit this business — info, photos, hours, posts, jobs, deals and staff — using their own TT Discover business account. Only you can add or remove collaborators, or delete the listing.</p>
-      <label for="c-email">Their email (must already have a TT Discover business account)</label><input type="text" id="c-email" autocomplete="off">
-      <div class="savebar"><button type="button" class="primary" id="addCollabBtn">Add Collaborator</button><span class="msg" id="collabMsg" role="status"></span></div>
+      <label for="c-email">Their email (they must already have a TT Discover business account). We will email them an invitation with Accept and Cancel buttons.</label><input type="text" id="c-email" autocomplete="off">
+      <div class="savebar"><button type="button" class="primary" id="addCollabBtn">Send Invitation</button><span class="msg" id="collabMsg" role="status"></span></div>
+      <h3 style="font-size:16px;margin:26px 0 4px;">Waiting for an answer</h3><div id="inviteList"></div>
       <h3 style="font-size:16px;margin:26px 0 4px;">Current collaborators</h3><div id="collabList"></div>
     </div>
 
@@ -653,17 +654,24 @@ async function renderCollab(){
   const box = $('collabList'); const collabs = biz.collaborators || [];
   box.innerHTML = collabs.length ? '' : empty('No collaborators yet.');
   collabs.forEach(c => {
-    box.appendChild(listRow(`<b>${esc(c.email)}</b><div class="sub">Added ${new Date(c.addedAt).toLocaleDateString()}</div>`, 'Remove', async () => { await api('collaborators/' + c.userId, 'DELETE'); renderCollab(); }));
+    box.appendChild(listRow(`<b>${esc(c.email)}</b><div class="sub">Joined ${new Date(c.addedAt).toLocaleDateString()}</div>`, 'Remove', async () => { await api('collaborators/' + c.userId, 'DELETE'); renderCollab(); }));
+  });
+  const ibox = $('inviteList');
+  let invites = [];
+  try { const r = await api('invites', 'GET'); invites = r.ok ? await r.json() : []; } catch (e) { invites = []; }
+  ibox.innerHTML = invites.length ? '' : empty('No invitations waiting.');
+  invites.forEach(i => {
+    ibox.appendChild(listRow(`<b>${esc(i.email)}</b><div class="sub">Invited ${new Date(i.createdAt).toLocaleDateString()} · waiting for them to accept</div>`, 'Cancel invite', async () => { await api('invites/' + i._id, 'DELETE'); renderCollab(); }));
   });
 }
 $('addCollabBtn').addEventListener('click', async () => {
   const msg = $('collabMsg'), email = $('c-email').value.trim();
   if (!email){ msg.textContent = 'An email is required.'; return; }
-  msg.textContent = 'Adding...';
+  msg.textContent = 'Sending...';
   const res = await api('collaborators', 'POST', { email });
   const data = await res.json().catch(() => ({}));
-  if (res.ok){ msg.textContent = 'Added!'; $('c-email').value = ''; renderCollab(); }
-  else msg.textContent = data.error || 'Could not add collaborator.';
+  if (res.ok){ msg.textContent = 'Invitation sent! They will get an email with Accept and Cancel buttons. You will get an email when they answer.'; $('c-email').value = ''; renderCollab(); }
+  else msg.textContent = data.error || 'Could not send the invitation.';
 });
 
 init();

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Invitation — TT Discover</title>
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<script>try { if (localStorage.getItem('tt_theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {}</script>
+<style>
+  :root { --bg: #fdf6ec; --text: #2a2a2a; --muted: #6b6b6b; --card: #ffffff; --border: #eadfca; }
+  [data-theme="dark"] { --bg: #16181d; --text: #e8e6e3; --muted: #a9a9a9; --card: #22252b; --border: #33363d; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  header { background: linear-gradient(135deg, #e0562f, #f2a33c); color: #fff; padding: 16px 20px; text-align: center; font-size: 20px; font-weight: 700; }
+  main { max-width: 460px; margin: 40px auto; padding: 0 18px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 26px 22px; text-align: center; }
+  h1 { font-size: 22px; margin-bottom: 10px; }
+  p { font-size: 15px; line-height: 1.6; margin: 8px 0; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .btns { display: flex; gap: 12px; justify-content: center; margin-top: 22px; flex-wrap: wrap; }
+  button, .link { font-family: inherit; font-size: 15px; font-weight: 700; border-radius: 24px; padding: 12px 28px; cursor: pointer; border: 1px solid transparent; text-decoration: none; display: inline-block; }
+  .accept { background: #e0562f; color: #fff; }
+  .cancel { background: transparent; color: var(--text); border-color: var(--border); }
+  button:disabled { opacity: .6; cursor: default; }
+  button:focus-visible, .link:focus-visible { outline: 2px solid #e0562f; outline-offset: 2px; }
+  .msg { min-height: 20px; margin-top: 14px; font-size: 14px; color: #e0562f; }
+  .big { font-size: 40px; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<header>TT Discover</header>
+<main>
+  <div class="card" id="card"><p class="muted">Loading your invitation...</p></div>
+</main>
+<script>
+const params = new URLSearchParams(location.search);
+const token = params.get('token') || '';
+const wanted = params.get('a') === 'decline' ? 'decline' : 'accept';
+const card = document.getElementById('card');
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function show(emoji, title, body, extra){
+  card.innerHTML = `<div class="big">${emoji}</div><h1>${esc(title)}</h1>${body}${extra || ''}`;
+}
+const homeLinks = '<div class="btns"><a class="link accept" href="/account.html">Go to Business Studio</a><a class="link cancel" href="/">Home</a></div>';
+
+async function respond(action){
+  const btns = card.querySelectorAll('button'); btns.forEach(b => b.disabled = true);
+  const msg = document.getElementById('msg'); msg.textContent = 'One moment...';
+  try {
+    const res = await fetch('/api/collab-invite/' + encodeURIComponent(token) + '/respond', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok){ msg.textContent = data.error || 'Something went wrong.'; btns.forEach(b => b.disabled = false); return; }
+    if (action === 'accept') show('✅', "You're in!", `<p>You can now help manage <b>${esc(data.bizName)}</b>. It shows up in your Business Studio when you sign in with your business account.</p>`, homeLinks);
+    else show('👍', 'Invitation cancelled', `<p>You won't be added to <b>${esc(data.bizName)}</b>. The owner has been told.</p>`, '<div class="btns"><a class="link cancel" href="/">Home</a></div>');
+  } catch (e) { msg.textContent = 'Could not reach the site. Please try again.'; btns.forEach(b => b.disabled = false); }
+}
+
+(async function init(){
+  if (!token){ show('⚠️', 'Invitation not found', '<p>This link is missing its invitation code. Open the link from your email again.</p>'); return; }
+  try {
+    const res = await fetch('/api/collab-invite/' + encodeURIComponent(token));
+    const inv = await res.json().catch(() => ({}));
+    if (!res.ok){ show('⚠️', 'Invitation not found', `<p>${esc(inv.error || 'This invitation link is not valid.')}</p>`); return; }
+    if (inv.status === 'accepted'){ show('✅', 'Already accepted', `<p>You are already helping manage <b>${esc(inv.bizName)}</b>.</p>`, homeLinks); return; }
+    if (inv.status === 'declined'){ show('👍', 'Invitation cancelled', '<p>This invitation was cancelled.</p>'); return; }
+    if (inv.status === 'expired'){ show('⌛', 'Invitation expired', `<p>This invitation has expired. Ask <b>${esc(inv.inviterEmail)}</b> to send a new one.</p>`); return; }
+    show('🤝', 'Join ' + inv.bizName,
+      `<p><b>${esc(inv.inviterEmail)}</b> invited you to help manage <b>${esc(inv.bizName)}</b> on TT Discover.</p>
+       <p class="muted">You can edit its info, photos, hours, posts, jobs and deals. Only the owner can delete it or change collaborators. This invitation was sent to ${esc(inv.inviteeEmail)}.</p>`,
+      `<div class="btns"><button class="accept" id="acceptBtn">Accept</button><button class="cancel" id="cancelBtn">Cancel</button></div><div class="msg" id="msg" role="status"></div>`);
+    document.getElementById('acceptBtn').addEventListener('click', () => respond('accept'));
+    document.getElementById('cancelBtn').addEventListener('click', () => respond('decline'));
+    document.getElementById(wanted === 'decline' ? 'cancelBtn' : 'acceptBtn').focus();
+  } catch (e) { show('⚠️', 'Something went wrong', '<p>Could not load the invitation. Please try again.</p>'); }
+})();
+</script>
+</body>
+</html>
