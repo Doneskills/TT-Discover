@@ -190,7 +190,7 @@
       <button type="button" class="ghost" data-add="menu" style="margin-top:8px;">Add menu photos</button>
       <label>Highlights</label><div class="photoGrid" id="g-highlights"></div>
       <button type="button" class="ghost" data-add="highlights" style="margin-top:8px;">Add highlight photos</button>
-      <div class="hint">Up to 10 photos in each group.</div>
+      <div class="hint" id="photoLimitHint">Up to 5 photos in each group.</div>
       <div id="hlNames"></div>
       <label>Menu items</label>
       <div class="hint" style="margin:0 0 8px;">Name, price, and a section (like Desserts or Signature).</div>
@@ -276,13 +276,14 @@
 </div>
 
 <script src="/areas.js"></script>
+<script src="/ui.js"></script>
 <script>
 const token = localStorage.getItem('ttp_token') || '';
 if (!token) location.href = '/account.html';
 const $ = id => document.getElementById(id);
 fillAreaSelect($('f-area'), 'Choose an area');
 $('switchBizBtn').addEventListener('click', async () => {
-  if (!confirm('Switch to a business account? You will be able to add and manage your business. You will stop getting area update emails on this account.')) return;
+  if (!(await ttConfirm('You will be able to add and manage your business. You will stop getting area update emails on this account.', { title: 'Switch to a business account?', ok: 'Switch' }))) return;
   $('switchMsg').textContent = 'Switching...';
   try {
     const r = await fetch('/api/me/account-type', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': token }, body: JSON.stringify({ accountType: 'business' }) });
@@ -351,6 +352,7 @@ function selectBiz(id){
   $('f-name').value = biz.name || ''; $('f-category').value = biz.category || '';
   $('f-description').value = biz.description || '';
   $('f-address').value = biz.address || ''; setAreaValue($('f-area'), biz.area);
+  { const lim = biz.photoLimit || ttPhotoLimit(me.plan); $('photoLimitHint').textContent = 'Up to ' + lim + ' photos in each group.' + (lim <= 5 ? ' Premium allows more.' : ''); }
   $('f-phone').value = biz.phone || ''; $('f-email').value = biz.email || '';
   ['facebook','instagram','website'].forEach(k => $('f-' + k).value = (biz.social || {})[k] || '');
   $('aboutFields').innerHTML = ABOUT.map(([k, l]) => `<label for="a-${k}">${l}</label><input type="text" id="a-${k}" maxlength="200" value="${esc((biz.about || {})[k] || '')}">`).join('');
@@ -484,7 +486,12 @@ $('photoInput').addEventListener('change', async e => {
   const urls = await Promise.all(files.map(shrink));
   if (photoTarget === 'main') state.imageUrl = urls[0];
   else if (photoTarget === 'logo') state.logoUrl = urls[0];
-  else { const sk = GRIDS[photoTarget][1]; state[sk] = [...state[sk], ...urls].slice(0, 10); }
+  else {
+    const sk = GRIDS[photoTarget][1], lim = biz.photoLimit || ttPhotoLimit(me.plan);
+    const room = Math.max(0, lim - state[sk].length);
+    if (urls.length > room) ttAlert(ttPhotoLimitMsg(lim > 5 ? 'premium' : 'free', 'photos in each group'), { title: 'Photo limit' });
+    state[sk] = [...state[sk], ...urls.slice(0, room)];
+  }
   paintPhotos(); paintHeader();
 });
 

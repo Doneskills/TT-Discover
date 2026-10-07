@@ -53,11 +53,35 @@ async function notifyAreaCustomers(area, subject, buildHtml){
   }
 }
 
-// Photo arrays: up to 10 images, stored as data URLs (already resized/compressed client-side).
-// Used for both the business's own photo gallery and its menu photos.
+// Photo arrays, stored as data URLs (already resized/compressed client-side).
+// Used for the business's own photo gallery, menu photos and highlights.
+// How many each group may hold depends on the owner's plan (customer photos on the Photos page are separate and not limited by this).
+const PHOTO_LIMIT = { free: 5, premium: 20 };
 function sanitizePhotoArray(arr){
   if (!Array.isArray(arr)) return [];
-  return arr.slice(0, 10).map(u => String(u || '').slice(0, 400000)).filter(Boolean);
+  return arr.slice(0, PHOTO_LIMIT.premium).map(u => String(u || '').slice(0, 400000)).filter(Boolean);
+}
+function effectivePlan(u){
+  if (!u || u.plan !== 'premium') return 'free';
+  if (u.premiumMethod === 'wipay' && u.premiumExpiresAt && new Date(u.premiumExpiresAt) < new Date()) return 'free';
+  return 'premium';
+}
+// Returns an error message if the request would put MORE photos on a page than the plan allows.
+// Pages that already hold more (older listings) can keep them or remove some, just not add.
+function photoLimitError(body, plan, existing){
+  const limit = PHOTO_LIMIT[plan];
+  const groups = [['photos', 'photos'], ['menuPhotos', 'menu photos'], ['highlights', 'highlight photos']];
+  for (const [key, label] of groups){
+    if (!Array.isArray(body[key])) continue;
+    const next = body[key].filter(Boolean).length;
+    const prev = existing && Array.isArray(existing[key]) ? existing[key].length : 0;
+    if (next > limit && next > prev){
+      return plan === 'premium'
+        ? `This page has reached the limit of ${limit} ${label}.`
+        : `Free business pages can have up to ${limit} ${label}. Upgrade to Premium to add more.`;
+    }
+  }
+  return '';
 }
 
 // About tab attributes — all optional, Google-Maps-style info chips.
@@ -514,6 +538,7 @@ app.get('/api/me', requireUser, async (req, res) => {
     verificationRequired: !!mailTransporter,
     preferredArea: user.preferredArea || null,
     plan: user.plan || 'free',
+    photoLimit: PHOTO_LIMIT[effectivePlan(user)],
     premiumMethod: user.premiumMethod || null,
     premiumExpiresAt: user.premiumExpiresAt || null,
     username: user.username || '',
@@ -715,7 +740,10 @@ app.get('/api/my/businesses', requireUser, async (req, res) => {
     const list = await businessesCol.find({
       $or: [{ ownerId: uid }, { 'collaborators.userId': uid }]
     }).sort({ name: 1 }).toArray();
-    res.json(list.map(biz => ({ ...publicBiz(biz), isOwner: biz.ownerId === uid })));
+    const ownerIds = [...new Set(list.map(b => b.ownerId).filter(Boolean))];
+    const owners = ownerIds.length ? await usersCol.find({ _id: { $in: ownerIds.map(i => new ObjectId(i)) } }).toArray() : [];
+    const planOf = {}; owners.forEach(o => { planOf[o._id.toString()] = effectivePlan(o); });
+    res.json(list.map(biz => ({ ...publicBiz(biz), isOwner: biz.ownerId === uid, photoLimit: PHOTO_LIMIT[planOf[biz.ownerId] || 'free'] })));
   } catch (err) {
     res.json([]);
   }
@@ -779,6 +807,8 @@ app.post('/api/my/businesses', requireUser, requireVerified, requireBusinessAcco
       });
     }
     const b = req.body || {};
+    const photoErr = photoLimitError(b, effectivePlan(req.user), null);
+    if (photoErr) return res.status(403).json({ error: photoErr });
     const doc = {
       ownerId: req.user._id.toString(),
       name: String(b.name || '').slice(0, 100),
@@ -846,6 +876,9 @@ app.put('/api/my/businesses/:id', requireUser, requireBusinessAccount, async (re
       return res.status(403).json({ error: 'You can only edit a business you own or collaborate on.' });
     }
     const b = req.body || {};
+    const ownerUser = biz.ownerId === req.user._id.toString() ? req.user : await usersCol.findOne({ _id: new ObjectId(biz.ownerId) });
+    const photoErr = photoLimitError(b, effectivePlan(ownerUser), biz);
+    if (photoErr) return res.status(403).json({ error: photoErr });
     const update = {};
     if (typeof b.name === 'string') update.name = b.name.slice(0, 100);
     if (typeof b.category === 'string' && b.category) update.category = b.category.slice(0, 40);

@@ -651,6 +651,8 @@
 </div>
 
 <script src="/areas.js"></script>
+<script src="/ui.js"></script>
+<script src="/hours.js"></script>
 <script>
 let token = localStorage.getItem('ttp_token') || '';
 let currentBizId = null;
@@ -748,8 +750,8 @@ photoFileInput.addEventListener('change', (e) => {
 });
 
 function handlePhotoFile(file){
-  if (!file.type.startsWith('image/')){ alert('Please choose an image file.'); return; }
-  if (photosState.length >= 10){ alert('You can add up to 10 photos.'); return; }
+  if (!file.type.startsWith('image/')){ ttAlert('Please choose an image file.'); return; }
+  if (photosState.length >= ttPhotoLimit(myPlan)){ ttAlert(ttPhotoLimitMsg(myPlan, 'photos'), { title: 'Photo limit' }); return; }
   const reader = new FileReader();
   reader.onload = (evt) => {
     const img = new Image();
@@ -848,19 +850,7 @@ function to12Hour(t){
 }
 
 function updateHoursSummary(){
-  const summary = document.getElementById('hoursSummary');
-  const groups = [];
-  DAYS.forEach(d => {
-    const st = hoursState[d.key];
-    const text = st.closed ? 'Closed' : `${to12Hour(st.open)} – ${to12Hour(st.close)}`;
-    const last = groups[groups.length - 1];
-    if (last && last.text === text) last.days.push(d.label);
-    else groups.push({ text, days: [d.label] });
-  });
-  summary.textContent = groups.map(g => {
-    const label = g.days.length > 1 ? `${g.days[0]}–${g.days[g.days.length - 1]}` : g.days[0];
-    return `${label}: ${g.text}`;
-  }).join(', ');
+  document.getElementById('hoursSummary').textContent = ttCompactHours(hoursState);
 }
 
 document.getElementById('hoursSummary').addEventListener('click', () => {
@@ -898,8 +888,8 @@ menuFileInput.addEventListener('change', (e) => {
 });
 
 function handleMenuFile(file){
-  if (!file.type.startsWith('image/')){ alert('Please choose an image file.'); return; }
-  if (menuPhotosState.length >= 10){ alert('You can add up to 10 menu photos.'); return; }
+  if (!file.type.startsWith('image/')){ ttAlert('Please choose an image file.'); return; }
+  if (menuPhotosState.length >= ttPhotoLimit(myPlan)){ ttAlert(ttPhotoLimitMsg(myPlan, 'menu photos'), { title: 'Photo limit' }); return; }
   const reader = new FileReader();
   reader.onload = (evt) => {
     const img = new Image();
@@ -955,8 +945,8 @@ highlightsFileInput.addEventListener('change', (e) => {
 });
 
 function handleHighlightFile(file){
-  if (!file.type.startsWith('image/')){ alert('Please choose an image file.'); return; }
-  if (highlightsState.length >= 10){ alert('You can add up to 10 highlight photos.'); return; }
+  if (!file.type.startsWith('image/')){ ttAlert('Please choose an image file.'); return; }
+  if (highlightsState.length >= ttPhotoLimit(myPlan)){ ttAlert(ttPhotoLimitMsg(myPlan, 'highlight photos'), { title: 'Photo limit' }); return; }
   const reader = new FileReader();
   reader.onload = (evt) => {
     const img = new Image();
@@ -1221,7 +1211,7 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
     body: JSON.stringify({ email, password })
   });
   const data = await res.json();
-  if (res.ok){ token = data.token; localStorage.setItem('ttp_token', token); enterApp(); }
+  if (res.ok){ token = data.token; localStorage.setItem('ttp_token', token); window.location.href = '/'; }
   else document.getElementById('authMsg').textContent = data.error || 'Could not log in.';
 });
 
@@ -1590,7 +1580,7 @@ document.getElementById('custLogoutBtn').addEventListener('click', () => {
 });
 
 document.getElementById('switchToBizBtn').addEventListener('click', async () => {
-  if (!confirm('Switch to a business account? You will be able to add and manage your business. You will stop getting area update emails on this account.')) return;
+  if (!(await ttConfirm('You will be able to add and manage your business. You will stop getting area update emails on this account.', { title: 'Switch to a business account?', ok: 'Switch' }))) return;
   const msg = document.getElementById('switchMsg');
   msg.textContent = 'Switching...';
   try {
@@ -1818,18 +1808,7 @@ function createEditHoursPicker(container, initial){
   container.appendChild(editor);
 
   function updateSummary(){
-    const groups = [];
-    DAYS.forEach(d => {
-      const st = state[d.key];
-      const text = st.closed ? 'Closed' : `${to12Hour(st.open)} – ${to12Hour(st.close)}`;
-      const last = groups[groups.length - 1];
-      if (last && last.text === text) last.days.push(d.label);
-      else groups.push({ text, days: [d.label] });
-    });
-    summary.textContent = groups.map(g => {
-      const label = g.days.length > 1 ? `${g.days[0]}–${g.days[g.days.length - 1]}` : g.days[0];
-      return `${label}: ${g.text}`;
-    }).join(', ');
+    summary.textContent = ttCompactHours(state);
   }
   function rebuild(){
     editor.innerHTML = '';
@@ -1893,7 +1872,7 @@ function createEditPhotoPicker(container, initial, label){
   fileInput.addEventListener('change', (e) => {
     Array.from(e.target.files).forEach(file => {
       if (!file.type.startsWith('image/')) return;
-      if (state.length >= 10){ alert('You can add up to 10 photos.'); return; }
+      if (state.length >= ttPhotoLimit(myPlan)){ ttAlert(ttPhotoLimitMsg(myPlan, 'photos'), { title: 'Photo limit' }); return; }
       const reader = new FileReader();
       reader.onload = (evt) => {
         const img = new Image();

@@ -108,6 +108,7 @@
   </section>
 </div>
 
+<script src="/ui.js"></script>
 <script>
 const token = localStorage.getItem('ttp_token') || '';
 if (!token) window.location.href = '/account.html';
@@ -162,7 +163,7 @@ $('avatar').addEventListener('click', () => { if (editing) $('avatarFile').click
 $('avatarFile').addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  if (!file.type.startsWith('image/')){ alert('Please choose an image file.'); return; }
+  if (!file.type.startsWith('image/')){ ttAlert('Please choose an image file.'); return; }
   const reader = new FileReader();
   reader.onload = (evt) => {
     const img = new Image();

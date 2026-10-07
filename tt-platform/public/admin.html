@@ -6,6 +6,7 @@
 <title>Admin — TT Discover</title>
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
 <style>
+  :root { --card-bg: #241c15; --text: #f5ede1; --border: #4a3a28; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', system-ui, sans-serif; background: #1a1410; color: #f5ede1; padding: 20px; }
   .wrap { max-width: 480px; margin: 0 auto; }
@@ -101,6 +102,7 @@
   </div>
 </div>
 
+<script src="/ui.js"></script>
 <script>
 let adminPassword = '';
 
@@ -122,7 +124,7 @@ dropZone.addEventListener('drop', (e) => {
 fileInput.addEventListener('change', (e) => { if (e.target.files[0]) handleImageFile(e.target.files[0]); });
 
 function handleImageFile(file){
-  if (!file.type.startsWith('image/')){ alert('Please choose an image file.'); return; }
+  if (!file.type.startsWith('image/')){ ttAlert('Please choose an image file.'); return; }
   const reader = new FileReader();
   reader.onload = (evt) => {
     const img = new Image();
@@ -230,7 +232,7 @@ async function loadReports(){
     if (r.type !== 'business' && !r.gone){
       const rm = document.createElement('button'); rm.textContent = 'Remove ' + r.type;
       rm.addEventListener('click', async () => {
-        if (!confirm('Remove this ' + r.type + ' for good?')) return;
+        if (!(await ttConfirm('Remove this ' + r.type + ' for good?', { title: 'Remove ' + r.type, ok: 'Remove', danger: true }))) return;
         await fetch('/api/admin/reports/' + r._id + '/remove', { method: 'POST', headers: { 'x-admin-password': adminPassword } });
         loadReports();
       });

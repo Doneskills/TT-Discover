@@ -27,6 +27,10 @@
   a { color: inherit; }
   button, input, textarea { font-family: inherit; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  html { background: #f2f0eb; } html[data-theme="dark"] { background: #16181d; }
+  /* Keep the page blank until we know which design it uses, so the default design never flashes first. */
+  body:not(.ready) .shell, body:not(.ready) #previewBar { display: none; }
+  body:not(.ready)::before { content: 'Loading...'; display: block; padding: 60px 20px; text-align: center; color: #8a8a8a; font-family: var(--body); }
 
   .embed body { min-height: 0; }
   .embed .shell { min-height: 0; }
@@ -206,6 +210,8 @@
 </div>
 <div id="lightbox" role="dialog" aria-label="Photo"><span class="x" aria-hidden="true">✕</span><img alt=""></div>
 
+<script src="/ui.js"></script>
+<script src="/hours.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
@@ -243,20 +249,24 @@ function fmt12(t){
 function openStatus(h){
   if (!h || typeof h === 'string') return { text: typeof h === 'string' ? h : '', known: false };
   const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Port_of_Spain' }));
-  const d = h[DAYS[now.getDay()]];
-  if (!d || d.closed) return { text: 'Closed today', open: false, known: true };
   const mins = now.getHours() * 60 + now.getMinutes();
-  const [oh, om] = d.open.split(':').map(Number), [ch, cm] = d.close.split(':').map(Number);
-  const o = oh * 60 + om, c = ch * 60 + cm;
-  if (mins >= o && mins < c) return { text: `Open · Closes ${fmt12(d.close)}`, open: true, known: true };
-  if (mins < o) return { text: `Closed · Opens ${fmt12(d.open)}`, open: false, known: true };
+  const toM = t => { const [a, b] = String(t || '0:0').split(':').map(Number); return a * 60 + (b || 0); };
+  const today = h[DAYS[now.getDay()]], yest = h[DAYS[(now.getDay() + 6) % 7]];
+  // Still open from last night's shift that runs past midnight (e.g. 5pm - 1am)?
+  if (yest && !yest.closed && toM(yest.close) <= toM(yest.open) && mins < toM(yest.close)) return { text: `Open · Closes ${fmt12(yest.close)}`, open: true, known: true };
+  if (!today || today.closed) return { text: 'Closed today', open: false, known: true };
+  const o = toM(today.open), c = toM(today.close);
+  if (c <= o){ // closes after midnight
+    if (mins >= o) return { text: `Open · Closes ${fmt12(today.close)}`, open: true, known: true };
+    return { text: `Closed · Opens ${fmt12(today.open)}`, open: false, known: true };
+  }
+  if (mins >= o && mins < c) return { text: `Open · Closes ${fmt12(today.close)}`, open: true, known: true };
+  if (mins < o) return { text: `Closed · Opens ${fmt12(today.open)}`, open: false, known: true };
   return { text: 'Closed for today', open: false, known: true };
 }
 function hoursLines(h){
   if (!h) return '';
-  if (typeof h === 'string') return esc(h);
-  const names = { mon:'Mon', tue:'Tue', wed:'Wed', thu:'Thu', fri:'Fri', sat:'Sat', sun:'Sun' };
-  return Object.keys(names).filter(k => h[k]).map(k => `${names[k]}: ${h[k].closed ? 'Closed' : fmt12(h[k].open) + ' – ' + fmt12(h[k].close)}`).join(' · ');
+  return esc(ttCompactHours(h));
 }
 
 function route(){ const p = (location.hash || '#home').slice(1); return pages().some(x => x[0] === p) ? p : 'home'; }
@@ -451,7 +461,7 @@ function wirePhotos(){
   }
   document.querySelectorAll('.delPhoto').forEach(b => b.addEventListener('click', async ev => {
     ev.stopPropagation();
-    if (!confirm('Remove this photo?')) return;
+    if (!(await ttConfirm('Remove this photo? This cannot be undone.', { title: 'Remove photo', ok: 'Remove', danger: true }))) return;
     const res = await fetch(`/api/businesses/${bizId}/photos/${b.dataset.id}`, { method: 'DELETE', headers: { 'x-auth-token': token } });
     if (res.ok){ custPhotos = custPhotos.filter(c => c._id !== b.dataset.id); render(); }
   }));
@@ -584,23 +594,23 @@ if (embed && window.ResizeObserver) new ResizeObserver(sendHeight).observe(docum
 (async function init(){
   if (previewMode){
     try { biz = JSON.parse(localStorage.getItem('ttp_preview_draft') || 'null'); } catch (e) { biz = null; }
-    if (!biz){ $('main').innerHTML = '<h1 class="title">Nothing to preview</h1><p class="desc">Go back to Business Studio and click View it again.</p>'; return; }
+    if (!biz){ document.body.classList.add('ready'); $('main').innerHTML = '<h1 class="title">Nothing to preview</h1><p class="desc">Go back to Business Studio and click View it again.</p>'; return; }
     biz.name = biz.name || 'Your business name'; biz.reviews = biz.reviews || [];
     $('previewBar').classList.add('show');
     document.title = 'Preview — ' + biz.name;
     document.body.dataset.template = biz.template || 'food';
-    render();
+    document.body.classList.add('ready'); render();
     return;
   }
   const [b, u] = await Promise.all([
     fetch('/api/businesses/' + bizId).then(r => r.ok ? r.json() : null).catch(() => null),
     token ? fetch('/api/me', { headers: { 'x-auth-token': token } }).then(r => r.ok ? r.json() : null).catch(() => null) : null
   ]);
-  if (!b){ $('main').innerHTML = '<h1 class="title">Listing not found</h1><p class="desc"><a href="/">Back to TT Discover</a></p>'; return; }
+  if (!b){ document.body.classList.add('ready'); $('main').innerHTML = '<h1 class="title">Listing not found</h1><p class="desc"><a href="/">Back to TT Discover</a></p>'; return; }
   biz = b; me = u;
   document.title = biz.name + ' — TT Discover';
   document.body.dataset.template = biz.template || 'food';
-  render();
+  document.body.classList.add('ready'); render();
 })();
 </script>
 </body>
