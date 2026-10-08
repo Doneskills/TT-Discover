@@ -795,7 +795,7 @@ app.delete('/api/businesses/:id/photos/:photoId', requireUser, async (req, res) 
   } catch (err) { res.status(400).json({ error: 'Could not remove photo.' }); }
 });
 
-const TEMPLATES = ['food', 'fabric'];
+const TEMPLATES = ['food', 'fabric', 'beauty', 'build'];
 app.post('/api/my/businesses', requireUser, requireVerified, requireBusinessAccount, async (req, res) => {
   if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
   try {
