@@ -308,7 +308,9 @@ app.get('/api/businesses', async (req, res) => {
     const matchStage = q
       ? { $match: { $or: [
           { name: { $regex: q, $options: 'i' } },
-          { description: { $regex: q, $options: 'i' } }
+          { description: { $regex: q, $options: 'i' } },
+          { category: { $regex: q, $options: 'i' } },
+          { area: { $regex: q, $options: 'i' } }
         ] } }
       : { $match: {} };
 

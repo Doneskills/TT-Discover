@@ -93,6 +93,12 @@
     width: 100%; padding: 12px 16px; border-radius: 30px; border: none;
     font-size: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.15);
   }
+  .catRow { display: flex; gap: 8px; overflow-x: auto; max-width: 900px; margin: 14px auto 0; padding: 2px 12px 4px; scrollbar-width: none; }
+  .catRow::-webkit-scrollbar { display: none; }
+  .catChip { flex: 0 0 auto; border: 1.5px solid rgba(255,255,255,0.8); background: rgba(255,255,255,0.15); color: #fff; font-family: inherit; font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 20px; cursor: pointer; white-space: nowrap; }
+  .catChip:hover { background: rgba(255,255,255,0.28); }
+  .catChip[aria-pressed="true"] { background: #fff; color: #c8431f; border-color: #fff; }
+  .catChip:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   main { max-width: 900px; margin: 0 auto; padding: 24px 16px 60px; }
   section { margin-bottom: 34px; }
   .sectionTitle {
@@ -226,8 +232,9 @@
   <h1><img src="/icon.svg" alt="" style="height:1em;vertical-align:-0.15em;margin-right:8px;">TT Discover</h1>
   <p>Discover what's good, right here in Trinidad &amp; Tobago</p>
   <div class="searchWrap">
-    <input type="text" id="searchInput" placeholder="Search restaurants...">
+    <input type="text" id="searchInput" placeholder="Search businesses, services, areas...">
   </div>
+  <div class="catRow" id="catRow" role="group" aria-label="Filter by category" style="display:none;"></div>
 </header>
 
 <main>
@@ -236,7 +243,7 @@
     <div class="cardGrid" id="featuredGrid"></div>
   </section>
   <section>
-    <div class="sectionTitle">📍 All restaurants</div>
+    <div class="sectionTitle" id="allTitle">📍 All businesses</div>
     <div class="cardGrid" id="allGrid"><div class="emptyState">Loading...</div></div>
   </section>
 </main>
@@ -411,7 +418,7 @@ function cardHtml(biz){
   const deals = activeDeals(biz);
   const imgStyle = biz.imageUrl ? `style="background-image:url('${biz.imageUrl.replace(/'/g,"")}')"` : '';
   return `<div class="card" onclick="openDetail('${biz._id}')">
-    <div class="cardImg" ${imgStyle}>${biz.imageUrl ? '' : '🍽️'}</div>
+    <div class="cardImg" ${imgStyle}>${biz.imageUrl ? '' : '🏪'}</div>
     <div class="cardBody">
       ${biz.isFeatured ? '<div class="featuredBadge">⭐ Featured</div>' : ''}
       <div class="cardName">${escapeHtml(biz.name)}</div>
@@ -436,19 +443,54 @@ function escapeHtml(s){
   return d.innerHTML;
 }
 
+let baseList = [];      // everything (used to build the category buttons)
+let activeCat = '';     // lower-case category currently chosen, '' = all
+let searchText = '';
+const normCat = c => String(c || '').trim().toLowerCase();
+
 async function loadBusinesses(query){
-  const url = '/api/businesses' + (query ? '?q=' + encodeURIComponent(query) : '');
+  searchText = (query || '').trim();
+  const url = '/api/businesses' + (searchText ? '?q=' + encodeURIComponent(searchText) : '');
   const res = await fetch(url);
   allBusinesses = await res.json();
+  if (!searchText) baseList = allBusinesses;
   render();
 }
+
+function paintCategories(){
+  const row = document.getElementById('catRow');
+  const counts = new Map();
+  baseList.forEach(b => {
+    const k = normCat(b.category);
+    if (!k) return;
+    const e = counts.get(k) || { label: String(b.category).trim(), n: 0 };
+    e.n++; counts.set(k, e);
+  });
+  if (activeCat && !counts.has(activeCat)) activeCat = '';
+  const cats = [...counts.entries()].sort((a, b) => b[1].n - a[1].n).slice(0, 14);
+  if (!cats.length){ row.style.display = 'none'; row.innerHTML = ''; return; }
+  row.style.display = 'flex';
+  const chip = (key, label) => `<button type="button" class="catChip" data-cat="${escapeHtml(key)}" aria-pressed="${activeCat === key}">${escapeHtml(label)}</button>`;
+  row.innerHTML = chip('', 'All') + cats.map(([k, e]) => chip(k, e.label)).join('');
+}
+document.getElementById('catRow').addEventListener('click', (e) => {
+  const btn = e.target.closest('.catChip');
+  if (!btn) return;
+  activeCat = btn.dataset.cat || '';
+  render();
+});
 
 function render(){
   const featuredSection = document.getElementById('featuredSection');
   const featuredGrid = document.getElementById('featuredGrid');
   const allGrid = document.getElementById('allGrid');
+  paintCategories();
 
-  const featured = shuffle(allBusinesses.filter(b => b.isFeatured));
+  const shown = activeCat ? allBusinesses.filter(b => normCat(b.category) === activeCat) : allBusinesses;
+  const catLabel = activeCat ? (baseList.find(b => normCat(b.category) === activeCat) || {}).category : '';
+  document.getElementById('allTitle').textContent = catLabel ? '📍 ' + String(catLabel).trim() : (searchText ? '📍 Search results' : '📍 All businesses');
+
+  const featured = shuffle(shown.filter(b => b.isFeatured));
   if (featured.length){
     featuredSection.style.display = 'block';
     featuredGrid.innerHTML = featured.map(cardHtml).join('');
@@ -456,9 +498,9 @@ function render(){
     featuredSection.style.display = 'none';
   }
 
-  allGrid.innerHTML = allBusinesses.length
-    ? allBusinesses.map(cardHtml).join('')
-    : '<div class="emptyState">No listings yet.</div>';
+  allGrid.innerHTML = shown.length
+    ? shown.map(cardHtml).join('')
+    : `<div class="emptyState">${searchText || activeCat ? 'No businesses match that. Try a different word or category.' : 'No listings yet.'}</div>`;
 }
 
 function openDetail(id){
