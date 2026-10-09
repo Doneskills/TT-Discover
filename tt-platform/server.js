@@ -16,6 +16,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Until these are set, emails are just logged to the console instead of sent —
 // nothing breaks, this just quietly does nothing until credentials are added.
 let mailTransporter = null;
+// Preferred: send through Brevo's web API (works on Render's free plan, which blocks the normal SMTP ports).
+const BREVO_API_KEY = process.env.BREVO_API_KEY || '';
 if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS){
   mailTransporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
@@ -23,19 +25,49 @@ if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS){
     secure: Number(process.env.SMTP_PORT) === 465,
     auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
   });
-} else {
-  console.log('Email notifications: SMTP_HOST/SMTP_USER/SMTP_PASS not set — emails will be logged, not sent.');
 }
+// True when the site has some way to send email (web API or SMTP).
+const mailEnabled = !!(BREVO_API_KEY || mailTransporter);
+if (!mailEnabled){
+  console.log('Email notifications: BREVO_API_KEY (or SMTP_HOST/SMTP_USER/SMTP_PASS) not set — emails will be logged, not sent.');
+} else {
+  console.log('Email notifications: ' + (BREVO_API_KEY ? 'sending through the Brevo web API.' : 'sending through SMTP.'));
+}
+
 const MAIL_FROM = process.env.SMTP_FROM || 'TT Discover <notifications@ttdiscover.example>';
 
+// "TT Discover <me@example.com>"  ->  { name, email }
+function parseFrom(str){
+  const m = String(str).match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/);
+  if (m) return { name: m[1].trim() || 'TT Discover', email: m[2].trim() };
+  return { name: 'TT Discover', email: String(str).trim() };
+}
+
 async function sendMail(to, subject, html){
-  if (!mailTransporter){
+  if (!mailEnabled){
     const links = (String(html).match(/href="([^"]+)"/g) || []).map(h => h.slice(6, -1));
-    console.log(`[email not sent — no SMTP configured] To: ${to} | Subject: ${subject}${links.length ? ' | Link: ' + links.join(' ') : ''}`);
+    console.log(`[email not sent — email not set up] To: ${to} | Subject: ${subject}${links.length ? ' | Link: ' + links.join(' ') : ''}`);
     return;
   }
   try {
-    await mailTransporter.sendMail({ from: MAIL_FROM, to, subject, html });
+    if (BREVO_API_KEY){
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 15000);
+      try {
+        const r = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: { 'api-key': BREVO_API_KEY, 'content-type': 'application/json', accept: 'application/json' },
+          body: JSON.stringify({ sender: parseFrom(MAIL_FROM), to: [{ email: to }], subject, htmlContent: html }),
+          signal: ctrl.signal
+        });
+        if (!r.ok){
+          const detail = await r.text().catch(() => '');
+          throw new Error(`Brevo said ${r.status}: ${detail.slice(0, 300)}`);
+        }
+      } finally { clearTimeout(timer); }
+    } else {
+      await mailTransporter.sendMail({ from: MAIL_FROM, to, subject, html });
+    }
   } catch (err) {
     console.error(`Email to ${to} failed:`, err.message);
   }
@@ -140,7 +172,7 @@ async function issueVerifyToken(req, userId, email){
 // Only enforced once email sending is set up (SMTP), otherwise nobody could ever verify.
 // Accounts created before this feature have no emailVerified flag and are treated as verified.
 function requireVerified(req, res, next){
-  if (mailTransporter && req.user && req.user.emailVerified === false){
+  if (mailEnabled && req.user && req.user.emailVerified === false){
     return res.status(403).json({ error: 'Please confirm your email first. Check your inbox (and spam) for our message.', needsVerification: true });
   }
   next();
@@ -438,8 +470,8 @@ app.post('/api/signup', async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
     const sessionToken = crypto.randomBytes(24).toString('hex');
     // Email confirmation only starts once email sending is set up; before that nobody could confirm.
-    const created = await usersCol.insertOne({ email, passwordHash, sessionToken, accountType, ...(mailTransporter ? { emailVerified: false } : {}), createdAt: new Date() });
-    if (mailTransporter) issueVerifyToken(req, created.insertedId, email).catch(() => {});
+    const created = await usersCol.insertOne({ email, passwordHash, sessionToken, accountType, ...(mailEnabled ? { emailVerified: false } : {}), createdAt: new Date() });
+    if (mailEnabled) issueVerifyToken(req, created.insertedId, email).catch(() => {});
     res.json({ token: sessionToken, email });
   } catch (err) {
     console.error('Signup failed:', err.message);
@@ -539,7 +571,7 @@ app.get('/api/me', requireUser, async (req, res) => {
     email: user.email,
     accountType: user.accountType === 'customer' ? 'customer' : 'business',
     emailVerified: user.emailVerified !== false,
-    verificationRequired: !!mailTransporter,
+    verificationRequired: mailEnabled,
     preferredArea: user.preferredArea || null,
     plan: user.plan || 'free',
     photoLimit: PHOTO_LIMIT[effectivePlan(user)],
@@ -1200,7 +1232,7 @@ app.post('/api/my/businesses/:id/collaborators', requireUser, requireBusinessAcc
          </p>
          <p style="font-size:13px;color:#777;">This invitation works for ${INVITE_DAYS} days. If you don't know this person, just ignore this email.</p>
        </div>`);
-    res.json({ ok: true, pending: true, emailSent: !!mailTransporter });
+    res.json({ ok: true, pending: true, emailSent: mailEnabled });
   } catch (err) {
     console.error('Invite failed:', err.message);
     res.status(500).json({ error: 'Could not send the invitation.' });
