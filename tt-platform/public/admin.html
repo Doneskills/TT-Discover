@@ -238,6 +238,15 @@ async function loadReports(){
       });
       acts.appendChild(rm);
     }
+    if (r.type === 'business' && !r.gone){
+      const delb = document.createElement('button'); delb.textContent = 'Delete business';
+      delb.addEventListener('click', async () => {
+        if (!(await ttConfirm('Delete "' + (r.bizName || 'this business') + '" for good? This cannot be undone.', { title: 'Delete business', ok: 'Delete', danger: true }))) return;
+        await fetch('/api/admin/businesses/' + r.bizId, { method: 'DELETE', headers: { 'x-admin-password': adminPassword } });
+        loadReports(); loadList();
+      });
+      acts.appendChild(delb);
+    }
     const dis = document.createElement('button'); dis.className = 'quiet'; dis.textContent = 'Dismiss';
     dis.addEventListener('click', async () => {
       await fetch('/api/admin/reports/' + r._id + '/dismiss', { method: 'POST', headers: { 'x-admin-password': adminPassword } });
@@ -269,8 +278,9 @@ async function loadList(){
     const delBtn = document.createElement('button');
     delBtn.textContent = 'Delete';
     delBtn.addEventListener('click', async () => {
+      if (!(await ttConfirm('Delete "' + biz.name + '" for good? This cannot be undone.', { title: 'Delete business', ok: 'Delete', danger: true }))) return;
       await fetch('/api/admin/businesses/' + biz._id, { method: 'DELETE', headers: { 'x-admin-password': adminPassword } });
-      loadList();
+      loadList(); loadReports();
     });
     row.appendChild(viewLink);
     row.appendChild(delBtn);

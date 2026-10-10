@@ -289,6 +289,8 @@
 
   <div id="verifyBanner" role="status" style="display:none;margin:0 0 14px;padding:10px 14px;border-radius:10px;background:#fff3cd;color:#5a4400;font-size:13px;line-height:1.5;"></div>
 
+  <div id="inviteBanner" style="display:none;margin:0 0 14px;"></div>
+
   <div id="loadingView" style="display:block;text-align:center;padding:60px 20px;color:#aaa;font-size:14px;">Loading...</div>
 
   <div id="authView" style="display:none;">
@@ -2246,6 +2248,47 @@ let currentBizIsOwner = true;
 fillAreaSelect(document.getElementById('custArea'));
 fillAreaSelect(document.getElementById('bArea'), 'Choose an area');
 
+// ---------------- Invitations waiting for me (answer them here, no email link needed) ----------------
+async function loadMyInvites(){
+  const box = document.getElementById('inviteBanner');
+  let list = [];
+  try {
+    const res = await fetch('/api/my/invites', { headers: { 'x-auth-token': token } });
+    list = res.ok ? await res.json() : [];
+  } catch (e) { list = []; }
+  if (!list.length){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.innerHTML = '';
+  list.forEach(inv => {
+    const d = document.createElement('div');
+    d.style.cssText = 'padding:12px 14px;border-radius:10px;background:#fff3cd;color:#5a4400;font-size:14px;line-height:1.5;margin-bottom:8px;';
+    d.innerHTML = '🤝 <b></b> invited you to help manage <b class="bn"></b>.';
+    d.querySelector('b').textContent = inv.inviterEmail;
+    d.querySelector('.bn').textContent = inv.bizName;
+    const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;';
+    const mk = (label, bg, color, action) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = label;
+      b.style.cssText = 'border:none;border-radius:20px;padding:8px 18px;font-weight:700;cursor:pointer;font-size:13px;background:' + bg + ';color:' + color + ';';
+      b.addEventListener('click', async () => {
+        row.querySelectorAll('button').forEach(x => x.disabled = true);
+        const r = await fetch('/api/my/invites/' + inv._id + '/respond', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': token }, body: JSON.stringify({ action })
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok){ ttAlert(data.error || 'Something went wrong.'); row.querySelectorAll('button').forEach(x => x.disabled = false); return; }
+        await loadMyInvites();
+        if (action === 'accept') loadMyListings();
+      });
+      return b;
+    };
+    row.appendChild(mk('Accept', '#e0562f', '#fff', 'accept'));
+    row.appendChild(mk('Cancel', '#eeeeee', '#333', 'decline'));
+    d.appendChild(row);
+    box.appendChild(d);
+  });
+  box.style.display = 'block';
+}
+
 async function enterApp(){
   const res = await fetch('/api/me', { headers: { 'x-auth-token': token } });
   if (!res.ok){ showView('auth'); return; }
@@ -2267,6 +2310,7 @@ async function enterApp(){
   document.getElementById('studioAvatarBig').textContent = initial;
   document.getElementById('studioTopAvatar').textContent = initial;
   showView('main');
+  loadMyInvites();
   await loadMyListings(true);
 
   const params = new URLSearchParams(window.location.search);

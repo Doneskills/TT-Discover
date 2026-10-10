@@ -43,6 +43,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&a
 function show(emoji, title, body, extra){
   card.innerHTML = `<div class="big">${emoji}</div><h1>${esc(title)}</h1>${body}${extra || ''}`;
 }
+let inviteeEmail = '';
 const homeLinks = '<div class="btns"><a class="link accept" href="/account.html">Go to Business Studio</a><a class="link cancel" href="/">Home</a></div>';
 
 async function respond(action){
@@ -54,7 +55,18 @@ async function respond(action){
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok){ msg.textContent = data.error || 'Something went wrong.'; btns.forEach(b => b.disabled = false); return; }
-    if (action === 'accept') show('✅', "You're in!", `<p>You can now help manage <b>${esc(data.bizName)}</b>. It shows up in your Business Studio when you sign in with your business account.</p>`, homeLinks);
+    if (action === 'accept'){
+      let signedInAs = '';
+      try {
+        const t = localStorage.getItem('ttp_token');
+        if (t){ const me = await fetch('/api/me', { headers: { 'x-auth-token': t } }); if (me.ok) signedInAs = ((await me.json()).email || '').toLowerCase(); }
+      } catch (e) {}
+      const same = signedInAs && signedInAs === String(inviteeEmail).toLowerCase();
+      const note = same
+        ? `<p>It now shows up in your Business Studio.</p>`
+        : `<p>Sign in to TT Discover with <b>${esc(inviteeEmail)}</b> to see it in your Business Studio.</p><p class="muted">Tip: if you opened this from the Gmail app, you may need to sign in again here, or open TT Discover in your normal browser. Your invitation is already saved, so you only accept once.</p>`;
+      show('✅', "You're in!", `<p>You can now help manage <b>${esc(data.bizName)}</b>.</p>${note}`, homeLinks);
+    }
     else show('👍', 'Invitation cancelled', `<p>You won't be added to <b>${esc(data.bizName)}</b>. The owner has been told.</p>`, '<div class="btns"><a class="link cancel" href="/">Home</a></div>');
   } catch (e) { msg.textContent = 'Could not reach the site. Please try again.'; btns.forEach(b => b.disabled = false); }
 }
@@ -65,9 +77,10 @@ async function respond(action){
     const res = await fetch('/api/collab-invite/' + encodeURIComponent(token));
     const inv = await res.json().catch(() => ({}));
     if (!res.ok){ show('⚠️', 'Invitation not found', `<p>${esc(inv.error || 'This invitation link is not valid.')}</p>`); return; }
-    if (inv.status === 'accepted'){ show('✅', 'Already accepted', `<p>You are already helping manage <b>${esc(inv.bizName)}</b>.</p>`, homeLinks); return; }
+    if (inv.status === 'accepted'){ show('✅', 'Already accepted', `<p>You are already helping manage <b>${esc(inv.bizName)}</b>. Sign in with <b>${esc(inv.inviteeEmail)}</b> and open Business Studio to find it. You don't need to accept again.</p>`, homeLinks); return; }
     if (inv.status === 'declined'){ show('👍', 'Invitation cancelled', '<p>This invitation was cancelled.</p>'); return; }
     if (inv.status === 'expired'){ show('⌛', 'Invitation expired', `<p>This invitation has expired. Ask <b>${esc(inv.inviterEmail)}</b> to send a new one.</p>`); return; }
+    inviteeEmail = inv.inviteeEmail;
     show('🤝', 'Join ' + inv.bizName,
       `<p><b>${esc(inv.inviterEmail)}</b> invited you to help manage <b>${esc(inv.bizName)}</b> on TT Discover.</p>
        <p class="muted">You can edit its info, photos, hours, posts, jobs and deals. Only the owner can delete it or change collaborators. This invitation was sent to ${esc(inv.inviteeEmail)}.</p>`,

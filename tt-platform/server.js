@@ -1306,6 +1306,47 @@ app.post('/api/collab-invite/:token/respond', async (req, res) => {
   }
 });
 
+// Signed-in people can also see and answer their invitations inside the site (Business Studio),
+// so they don't depend on the email link opening in the right browser.
+app.get('/api/my/invites', requireUser, async (req, res) => {
+  if (!invitesCol) return res.json([]);
+  try {
+    const list = await invitesCol.find({ inviteeId: req.user._id.toString(), status: 'pending', expiresAt: { $gt: new Date() } }).sort({ createdAt: -1 }).toArray();
+    res.json(list.map(i => ({ _id: i._id.toString(), bizName: i.bizName, inviterEmail: i.inviterEmail, createdAt: i.createdAt, expiresAt: i.expiresAt })));
+  } catch (err) { res.json([]); }
+});
+
+app.post('/api/my/invites/:id/respond', requireUser, requireBusinessAccount, async (req, res) => {
+  if (!invitesCol || !businessesCol) return res.status(503).json({ error: 'Not available right now.' });
+  try {
+    const action = (req.body || {}).action === 'accept' ? 'accept' : (req.body || {}).action === 'decline' ? 'decline' : '';
+    if (!action) return res.status(400).json({ error: 'Choose Accept or Cancel.' });
+    const uid = req.user._id.toString();
+    const inv = await invitesCol.findOne({ _id: new ObjectId(req.params.id), inviteeId: uid });
+    if (!inv) return res.status(404).json({ error: 'Invitation not found.' });
+    if (inv.status !== 'pending') return res.status(400).json({ error: 'This invitation was already answered or cancelled.' });
+    if (inv.expiresAt < new Date()) return res.status(400).json({ error: 'This invitation has expired. Ask the owner to send a new one.' });
+    if (action === 'accept'){
+      const biz = await businessesCol.findOne({ _id: new ObjectId(inv.bizId) });
+      if (!biz) return res.status(404).json({ error: 'That business no longer exists.' });
+      const claimed = await invitesCol.updateOne({ _id: inv._id, status: 'pending' }, { $set: { status: 'accepted', answeredAt: new Date() } });
+      if (!claimed.modifiedCount) return res.status(400).json({ error: 'This invitation was already answered.' });
+      if (!(biz.collaborators || []).some(c => c.userId === uid)){
+        await businessesCol.updateOne({ _id: biz._id }, { $push: { collaborators: { userId: uid, email: inv.inviteeEmail, addedAt: new Date() } } });
+      }
+    } else {
+      const claimed = await invitesCol.updateOne({ _id: inv._id, status: 'pending' }, { $set: { status: 'declined', answeredAt: new Date() } });
+      if (!claimed.modifiedCount) return res.status(400).json({ error: 'This invitation was already answered.' });
+    }
+    sendMail(inv.inviterEmail, `${inv.inviteeEmail} ${action === 'accept' ? 'accepted' : 'declined'} your invitation`,
+      `<p><b>${escapeHtml(inv.inviteeEmail)}</b> ${action === 'accept' ? 'accepted your invitation and can now help manage' : 'declined your invitation to help manage'} <b>${escapeHtml(inv.bizName)}</b>.</p>`);
+    res.json({ ok: true, action, bizName: inv.bizName });
+  } catch (err) {
+    console.error('Invite response (signed in) failed:', err.message);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
 app.delete('/api/my/businesses/:id/collaborators/:userId', requireUser, requireBusinessAccount, async (req, res) => {
   if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
   try {
@@ -1403,7 +1444,7 @@ app.post('/api/reports', requireUser, async (req, res) => {
     if (!already){
       const reason = REPORT_REASONS.includes(b.reason) ? b.reason : 'Other';
       await reportsCol.insertOne({ type, bizId, targetId, reason, details: String(b.details || '').trim().slice(0, 500), reporterId, reporterEmail: req.user.email, status: 'open', createdAt: new Date() });
-      if (process.env.ADMIN_EMAIL) sendMail(process.env.ADMIN_EMAIL, 'New report on TT Discover', `<p>A ${type} on <b>${escapeHtml(biz.name)}</b> was reported: ${escapeHtml(reason)}.</p><p>Open the admin page to review it.</p>`);
+      if (process.env.ADMIN_EMAIL) sendMail(process.env.ADMIN_EMAIL, `New report: ${type} on ${biz.name}`, `<p>A <b>${type}</b> on <b>${escapeHtml(biz.name)}</b> was reported.</p><p><b>Reason:</b> ${escapeHtml(reason)}</p>${b.details ? `<p><b>Note:</b> ${escapeHtml(String(b.details).trim().slice(0, 500))}</p>` : ''}<p><a href="${siteUrl(req)}/admin.html">Open the admin page to review it</a></p>`);
     }
     res.json({ ok: true });
   } catch (err) {
@@ -1493,6 +1534,7 @@ app.delete('/api/admin/businesses/:id', requireAdmin, async (req, res) => {
   if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
   try {
     await businessesCol.deleteOne({ _id: new ObjectId(req.params.id) });
+    if (reportsCol) await reportsCol.updateMany({ bizId: req.params.id, status: 'open' }, { $set: { status: 'removed', closedAt: new Date() } });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Could not delete business' });
