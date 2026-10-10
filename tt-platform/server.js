@@ -1203,7 +1203,7 @@ app.post('/api/my/businesses/:id/collaborators', requireUser, requireBusinessAcc
     if (!rateCheck('invite:' + req.user._id.toString(), 10, 60 * 60 * 1000)) return res.status(429).json({ error: 'You have sent a lot of invitations. Please try again in a little while.' });
     const email = String((req.body || {}).email || '').trim().toLowerCase();
     if (!email || !email.includes('@')) return res.status(400).json({ error: 'A valid email is required.' });
-    const found = await usersCol.findOne({ email, accountType: 'business' });
+    const found = await usersCol.findOne({ email, accountType: { $ne: 'customer' } });
     if (!found) return res.status(404).json({ error: 'No business account found with that email. They need a TT Discover business account first.' });
     const foundId = found._id.toString();
     if (foundId === biz.ownerId) return res.status(400).json({ error: "That's already the owner." });
@@ -1284,7 +1284,7 @@ app.post('/api/collab-invite/:token/respond', async (req, res) => {
 
     if (action === 'accept'){
       const user = await usersCol.findOne({ _id: new ObjectId(inv.inviteeId) });
-      if (!user || user.accountType !== 'business') return res.status(400).json({ error: 'Your account needs to be a business account first. Switch it in Settings, then open this link again.' });
+      if (!user || user.accountType === 'customer') return res.status(400).json({ error: 'Your account needs to be a business account first. Switch it in Settings, then open this link again.' });
       const biz = await businessesCol.findOne({ _id: new ObjectId(inv.bizId) });
       if (!biz) return res.status(404).json({ error: 'That business no longer exists.' });
       const claimed = await invitesCol.updateOne({ _id: inv._id, status: 'pending' }, { $set: { status: 'accepted', answeredAt: new Date() } });
@@ -1497,38 +1497,6 @@ app.post('/api/admin/reports/:id/remove', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/admin/check', requireAdmin, (req, res) => { res.json({ ok: true }); });
-
-app.post('/api/admin/businesses', requireAdmin, async (req, res) => {
-  if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
-  try {
-    const b = req.body || {};
-    const doc = {
-      name: String(b.name || '').slice(0, 100),
-      category: String(b.category || 'Food').slice(0, 40),
-      area: String(b.area || 'Port of Spain').slice(0, 60),
-      description: String(b.description || '').slice(0, 500),
-      address: String(b.address || '').slice(0, 200),
-      phone: String(b.phone || '').slice(0, 40),
-      hours: sanitizeHours(b.hours),
-      imageUrl: String(b.imageUrl || '').slice(0, 500),
-      featured: !!b.featured,
-      deals: [],
-      createdAt: new Date()
-    };
-    if (b.dealTitle){
-      doc.deals.push({
-        title: String(b.dealTitle).slice(0, 100),
-        description: String(b.dealDescription || '').slice(0, 300),
-        endDate: b.dealEndDate ? new Date(b.dealEndDate) : null
-      });
-    }
-    const result = await businessesCol.insertOne(doc);
-    res.json({ ok: true, id: result.insertedId });
-  } catch (err) {
-    console.error('Add business failed:', err.message);
-    res.status(500).json({ error: 'Could not add business' });
-  }
-});
 
 app.delete('/api/admin/businesses/:id', requireAdmin, async (req, res) => {
   if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
