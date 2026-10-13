@@ -37,6 +37,17 @@
   .repItem .acts { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
   .repItem .acts button { width: auto; margin: 0; padding: 6px 12px; font-size: 12px; }
   .repItem .acts .quiet { background: #3a2e21; }
+  .repItem .acts .warn { background: #b8860b; }
+  .repItem .acts .ban { background: #7a2c2c; }
+  .repItem .acts .good { background: #2f7a4a; }
+  .tag { display:inline-block; font-size:11px; padding:2px 8px; border-radius:10px; background:#7a2c2c; color:#fff; margin-left:6px; }
+  .appeal { margin-top:8px; padding:8px 10px; border-radius:8px; background:#2b2218; border:1px solid #4a3a28; font-size:13px; white-space:pre-line; }
+  .askBack { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; padding:20px; z-index:9999; }
+  .askBox { background:#241c15; border:1px solid #4a3a28; border-radius:14px; max-width:420px; width:100%; padding:20px; }
+  .askBox h3 { font-size:16px; margin-bottom:6px; color:#f2a33c; }
+  .askBox p { font-size:13px; color:#cbbfae; margin-bottom:10px; }
+  .askBox .row { display:flex; gap:8px; margin-top:12px; }
+  .askBox .row button { margin:0; }
   hr { border: none; border-top: 1px solid #3a2e21; margin: 24px 0; }
   .dropZone {
     border: 2px dashed #4a3a28; border-radius: 10px; padding: 20px; text-align: center;
@@ -61,6 +72,9 @@
     <h1 style="font-size:16px;">🚩 Reports <span id="repCount" style="color:#cbbfae;font-weight:400;"></span></h1>
     <div id="repList"><div class="msg">Loading...</div></div>
     <hr>
+    <h1 style="font-size:16px;">🚫 Banned accounts <span id="banCount" style="color:#cbbfae;font-weight:400;"></span></h1>
+    <div id="banList"><div class="msg">Loading...</div></div>
+    <hr>
     <h1 style="font-size:16px;">Existing Listings</h1>
     <div id="bizList"></div>
   </div>
@@ -79,10 +93,75 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
     document.getElementById('panel').style.display = 'block';
     loadList();
     loadReports();
+    loadBanned();
   } else {
     document.getElementById('loginMsg').textContent = 'Incorrect password.';
   }
 });
+
+
+// Small popup that asks for a line of text (used for warnings and ban reasons).
+function askText(title, help, placeholder){
+  return new Promise(resolve => {
+    const back = document.createElement('div'); back.className = 'askBack';
+    const box = document.createElement('div'); box.className = 'askBox';
+    box.innerHTML = '<h3></h3><p></p><textarea maxlength="500"></textarea><div class="row"><button type="button" class="okBtn">Send</button><button type="button" class="quiet noBtn" style="background:#3a2e21;">Cancel</button></div>';
+    box.querySelector('h3').textContent = title;
+    box.querySelector('p').textContent = help;
+    const ta = box.querySelector('textarea'); ta.placeholder = placeholder || '';
+    const done = v => { back.remove(); resolve(v); };
+    box.querySelector('.okBtn').addEventListener('click', () => { const v = ta.value.trim(); if (v) done(v); else ta.focus(); });
+    box.querySelector('.noBtn').addEventListener('click', () => done(null));
+    back.appendChild(box); document.body.appendChild(back); ta.focus();
+  });
+}
+async function adminPost(path, body){
+  const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword }, body: JSON.stringify(body || {}) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) await ttAlert(data.error || 'Something went wrong.');
+  return res.ok;
+}
+async function warnUser(r){
+  const msg = await askText('Send a warning', 'This is emailed to ' + r.targetEmail + ' and shown at the top of their account. Keep it friendly and clear.', 'e.g. A customer said some details on your page look wrong. Please check them.');
+  if (!msg) return;
+  if (await adminPost('/api/admin/users/' + r.targetUserId + '/warn', { message: msg, bizName: r.bizName })) await ttAlert('Warning sent to ' + r.targetEmail + '.');
+}
+async function banUser(r){
+  const why = await askText('Ban ' + r.targetEmail + '?', 'They will not be able to create or edit businesses, post reviews or add photos. They can still sign in to read this reason and write you a note.', 'Reason for the ban (they will see this)');
+  if (!why) return false;
+  return adminPost('/api/admin/users/' + r.targetUserId + '/ban', { reason: why });
+}
+async function loadBanned(){
+  const box = document.getElementById('banList');
+  let list = [];
+  try {
+    const res = await fetch('/api/admin/banned', { headers: { 'x-admin-password': adminPassword } });
+    list = res.ok ? await res.json() : [];
+  } catch (e) { list = []; }
+  document.getElementById('banCount').textContent = list.length ? '(' + list.length + ')' : '';
+  box.innerHTML = '';
+  if (!list.length){ box.innerHTML = '<div class="msg">No banned accounts.</div>'; return; }
+  list.forEach(u => {
+    const d = document.createElement('div'); d.className = 'repItem';
+    const head = document.createElement('div'); head.style.fontWeight = '700'; head.textContent = u.email; d.appendChild(head);
+    const why = document.createElement('div'); why.style.color = '#cbbfae'; why.textContent = 'Reason: ' + u.reason + ' (' + new Date(u.at).toLocaleDateString() + ')'; d.appendChild(why);
+    if (u.appeal){
+      const a = document.createElement('div'); a.className = 'appeal';
+      a.textContent = '✉️ Their note (' + new Date(u.appeal.createdAt).toLocaleDateString() + '):\n' + u.appeal.message;
+      d.appendChild(a);
+    } else {
+      const n = document.createElement('div'); n.style.cssText = 'color:#8a7a68;margin-top:6px;'; n.textContent = 'No note from them yet.'; d.appendChild(n);
+    }
+    const acts = document.createElement('div'); acts.className = 'acts';
+    const un = document.createElement('button'); un.className = 'good'; un.textContent = 'Unban';
+    un.addEventListener('click', async () => {
+      if (!(await ttConfirm('Unban ' + u.email + '? They will get an email and can use their account again.', { title: 'Unban account', ok: 'Unban' }))) return;
+      if (await adminPost('/api/admin/users/' + u.id + '/unban')) loadBanned();
+    });
+    acts.appendChild(un); d.appendChild(acts);
+    box.appendChild(d);
+  });
+}
 
 async function loadReports(){
   const box = document.getElementById('repList');
@@ -104,6 +183,7 @@ async function loadReports(){
     if (r.preview){ const p = document.createElement('div'); p.textContent = r.preview; d.appendChild(p); }
     if (r.imageUrl){ const im = document.createElement('img'); im.src = r.imageUrl; d.appendChild(im); }
     if (r.details){ const n = document.createElement('div'); n.style.color = '#cbbfae'; n.textContent = 'Note: ' + r.details; d.appendChild(n); }
+    if (r.targetEmail){ const t = document.createElement('div'); t.style.color = '#cbbfae'; t.textContent = (r.type === 'business' ? 'Owner: ' : 'Posted by: ') + r.targetEmail; if (r.targetBanned){ const tg = document.createElement('span'); tg.className = 'tag'; tg.textContent = 'banned'; t.appendChild(tg); } d.appendChild(t); }
     const who = document.createElement('div'); who.style.color = '#8a7a68'; who.textContent = 'Reported by ' + r.reporterEmail + ' on ' + new Date(r.createdAt).toLocaleDateString(); d.appendChild(who);
     if (r.gone){ const g = document.createElement('div'); g.style.color = '#f2a33c'; g.textContent = 'This content is already gone.'; d.appendChild(g); }
     const acts = document.createElement('div'); acts.className = 'acts';
@@ -116,7 +196,25 @@ async function loadReports(){
       });
       acts.appendChild(rm);
     }
+    if (r.targetUserId && r.targetEmail && !r.targetBanned){
+      const wb = document.createElement('button'); wb.className = 'warn'; wb.textContent = 'Warn';
+      wb.addEventListener('click', () => warnUser(r));
+      acts.appendChild(wb);
+      const bb = document.createElement('button'); bb.className = 'ban'; bb.textContent = 'Ban account';
+      bb.addEventListener('click', async () => { if (await banUser(r)){ loadReports(); loadBanned(); } });
+      acts.appendChild(bb);
+    }
     if (r.type === 'business' && !r.gone){
+      if (r.targetUserId && r.targetEmail && !r.targetBanned){
+        const db = document.createElement('button'); db.className = 'ban'; db.textContent = 'Delete + ban owner';
+        db.addEventListener('click', async () => {
+          if (!(await ttConfirm('Delete "' + (r.bizName || 'this business') + '" and ban ' + r.targetEmail + '? This cannot be undone.', { title: 'Delete and ban', ok: 'Continue', danger: true }))) return;
+          if (!(await banUser(r))) return;
+          await fetch('/api/admin/businesses/' + r.bizId, { method: 'DELETE', headers: { 'x-admin-password': adminPassword } });
+          loadReports(); loadList(); loadBanned();
+        });
+        acts.appendChild(db);
+      }
       const delb = document.createElement('button'); delb.textContent = 'Delete business';
       delb.addEventListener('click', async () => {
         if (!(await ttConfirm('Delete "' + (r.bizName || 'this business') + '" for good? This cannot be undone.', { title: 'Delete business', ok: 'Delete', danger: true }))) return;

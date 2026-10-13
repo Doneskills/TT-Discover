@@ -275,9 +275,27 @@
 
   <div id="verifyBanner" role="status" style="display:none;margin:0 0 14px;padding:10px 14px;border-radius:10px;background:#fff3cd;color:#5a4400;font-size:13px;line-height:1.5;"></div>
 
+  <div id="warnBanner" style="display:none;margin:0 0 14px;"></div>
   <div id="inviteBanner" style="display:none;margin:0 0 14px;"></div>
 
   <div id="loadingView" style="display:block;text-align:center;padding:60px 20px;color:#aaa;font-size:14px;">Loading...</div>
+
+  <div id="banView" style="display:none;">
+    <div class="card" style="text-align:center;">
+      <div style="font-size:40px;">🚫</div>
+      <h2 style="margin:6px 0 10px;">Your account is suspended</h2>
+      <p style="font-size:14px;line-height:1.6;">You can't create or edit businesses, post reviews or add photos right now.</p>
+      <p style="font-size:14px;line-height:1.6;margin-top:10px;"><b>Reason:</b> <span id="banReason"></span></p>
+      <div id="banAppealDone" style="display:none;margin-top:14px;padding:10px 12px;border-radius:10px;background:var(--soft-bg);font-size:13.5px;text-align:left;"></div>
+      <div id="banAppealForm" style="margin-top:16px;text-align:left;">
+        <label for="banNote" style="display:block;font-size:14px;font-weight:600;margin-bottom:6px;">Think this was a mistake? Write us a note</label>
+        <textarea id="banNote" maxlength="1000" rows="5" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card-bg);color:var(--text);font-family:inherit;font-size:14px;" placeholder="Explain what happened and why your account should be unbanned."></textarea>
+        <div id="banNoteMsg" role="status" style="font-size:13px;color:#e0562f;min-height:18px;margin-top:6px;"></div>
+        <button type="button" id="banNoteBtn" style="margin-top:6px;width:100%;padding:12px;border:none;border-radius:12px;background:#e0562f;color:#fff;font-weight:700;font-size:15px;cursor:pointer;">Send note</button>
+      </div>
+      <button type="button" id="banLogoutBtn" style="margin-top:14px;background:none;border:none;color:var(--text-muted);text-decoration:underline;cursor:pointer;font-size:13px;">Log out</button>
+    </div>
+  </div>
 
   <div id="authView" style="display:none;">
     <div class="card">
@@ -1147,6 +1165,7 @@ async function loadAnalytics(){
 
 function showView(view){
   document.getElementById('loadingView').style.display = 'none';
+  document.getElementById('banView').style.display = view === 'ban' ? 'block' : 'none';
   document.getElementById('authView').style.display = view === 'auth' ? 'block' : 'none';
   document.getElementById('mainView').style.display = view === 'main' ? 'block' : 'none';
   document.getElementById('customerView').style.display = view === 'customer' ? 'block' : 'none';
@@ -2263,6 +2282,58 @@ async function loadMyInvites(){
   box.style.display = 'block';
 }
 
+// ---------------- Warnings from the admin, and the suspended-account screen ----------------
+function showWarnings(list){
+  const box = document.getElementById('warnBanner');
+  box.innerHTML = '';
+  if (!list || !list.length){ box.style.display = 'none'; return; }
+  list.forEach(w => {
+    const d = document.createElement('div');
+    d.style.cssText = 'padding:12px 14px;border-radius:10px;background:#fde8e4;color:#7a1f10;font-size:14px;line-height:1.5;margin-bottom:8px;';
+    const h = document.createElement('div'); h.style.fontWeight = '700';
+    h.textContent = '⚠️ Warning from TT Discover' + (w.bizName ? ' about ' + w.bizName : '');
+    const m = document.createElement('div'); m.textContent = w.message; m.style.cssText = 'margin-top:4px;white-space:pre-line;';
+    d.appendChild(h); d.appendChild(m);
+    box.appendChild(d);
+  });
+  const ok = document.createElement('button');
+  ok.type = 'button'; ok.textContent = 'OK, I understand';
+  ok.style.cssText = 'border:none;border-radius:20px;padding:8px 18px;font-weight:700;cursor:pointer;font-size:13px;background:#e0562f;color:#fff;';
+  ok.addEventListener('click', async () => {
+    await fetch('/api/me/warnings/seen', { method: 'POST', headers: { 'x-auth-token': token } }).catch(() => {});
+    box.style.display = 'none'; box.innerHTML = '';
+  });
+  box.appendChild(ok);
+  box.style.display = 'block';
+}
+
+function showBanScreen(b){
+  document.getElementById('banReason').textContent = b.reason || 'No reason was given.';
+  const done = document.getElementById('banAppealDone'), form = document.getElementById('banAppealForm');
+  if (b.appeal){
+    done.style.display = 'block';
+    done.textContent = 'Your note was sent on ' + new Date(b.appeal.createdAt).toLocaleDateString() + ': "' + b.appeal.message + '". You can send another one below if you want to add something.';
+  } else done.style.display = 'none';
+  form.style.display = 'block';
+  showView('ban');
+}
+document.getElementById('banNoteBtn').addEventListener('click', async () => {
+  const msg = document.getElementById('banNoteMsg'), note = document.getElementById('banNote').value.trim();
+  if (note.length < 10){ msg.textContent = 'Please write a few sentences so we can understand.'; return; }
+  msg.textContent = 'Sending...';
+  const res = await fetch('/api/me/appeal', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': token }, body: JSON.stringify({ message: note }) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok){ msg.textContent = data.error || 'Could not send your note.'; return; }
+  document.getElementById('banNote').value = '';
+  msg.textContent = '';
+  const done = document.getElementById('banAppealDone');
+  done.style.display = 'block'; done.textContent = 'Thank you. Your note was sent and we will read it.';
+});
+document.getElementById('banLogoutBtn').addEventListener('click', () => {
+  localStorage.removeItem('ttp_token');
+  window.location.href = '/';
+});
+
 async function enterApp(){
   const res = await fetch('/api/me', { headers: { 'x-auth-token': token } });
   if (!res.ok){ showView('auth'); return; }
@@ -2271,6 +2342,8 @@ async function enterApp(){
   myEmail = data.email;
   myUserId = data.id;
   showVerifyBanner(data);
+  if (data.banned){ showBanScreen(data.banned); return; }
+  showWarnings(data.warnings);
 
   if (data.accountType === 'customer'){
     document.getElementById('custEmail').textContent = data.email;

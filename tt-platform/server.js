@@ -261,6 +261,11 @@ async function requireUser(req, res, next){
   try {
     const user = await usersCol.findOne({ sessionToken: token });
     if (!user) return res.status(401).json({ error: 'Not signed in' });
+    if (user.banned){
+      const path = String(req.originalUrl || '').split('?')[0];
+      const allowed = (req.method === 'GET' && path === '/api/me') || (req.method === 'POST' && path === '/api/me/appeal');
+      if (!allowed) return res.status(403).json({ banned: true, error: 'Your account has been suspended. Sign in at the Business Studio page to read why and send us a note.' });
+    }
     req.user = user;
     next();
   } catch (err) {
@@ -580,8 +585,33 @@ app.get('/api/me', requireUser, async (req, res) => {
     username: user.username || '',
     realName: user.realName || '',
     bio: user.bio || '',
-    avatarUrl: user.avatarUrl || ''
+    avatarUrl: user.avatarUrl || '',
+    banned: user.banned ? { reason: user.banned.reason || '', at: user.banned.at || null, appeal: user.appeal ? { message: user.appeal.message, createdAt: user.appeal.createdAt } : null } : null,
+    warnings: (user.warnings || []).filter(w => !w.seen).map(w => ({ id: String(w._id), message: w.message, bizName: w.bizName || '', createdAt: w.createdAt }))
   });
+});
+
+// A suspended person can write one note at a time explaining why they should be unbanned.
+app.post('/api/me/appeal', requireUser, async (req, res) => {
+  if (!usersCol) return res.status(503).json({ error: 'Database not connected' });
+  try {
+    if (!req.user.banned) return res.status(400).json({ error: 'Your account is not suspended.' });
+    const message = String((req.body || {}).message || '').trim().slice(0, 1000);
+    if (message.length < 10) return res.status(400).json({ error: 'Please write a few sentences so we can understand.' });
+    if (!rateCheck('appeal:' + req.user._id.toString(), 3, 24 * 60 * 60 * 1000)) return res.status(429).json({ error: 'You have sent several notes today. Please wait and try again tomorrow.' });
+    await usersCol.updateOne({ _id: req.user._id }, { $set: { appeal: { message, createdAt: new Date() } } });
+    if (process.env.ADMIN_EMAIL) sendMail(process.env.ADMIN_EMAIL, 'Appeal from a suspended account',
+      `<p><b>${escapeHtml(req.user.email)}</b> wrote a note asking to be unbanned.</p><p>${escapeHtml(message).replace(/\n/g, '<br>')}</p><p><a href="${siteUrl(req)}/admin.html">Open the admin page</a></p>`);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Could not send your note.' }); }
+});
+
+app.post('/api/me/warnings/seen', requireUser, async (req, res) => {
+  if (!usersCol) return res.status(503).json({ error: 'Database not connected' });
+  try {
+    await usersCol.updateOne({ _id: req.user._id }, { $set: { 'warnings.$[w].seen': true } }, { arrayFilters: [{ 'w.seen': { $ne: true } }] });
+    res.json({ ok: true });
+  } catch (err) { res.json({ ok: true }); }
 });
 
 app.post('/api/me/preferences', requireUser, async (req, res) => {
@@ -1436,14 +1466,18 @@ app.post('/api/reports', requireUser, async (req, res) => {
     if (!type || !bizId || !targetId) return res.status(400).json({ error: 'Nothing to report.' });
     const reporterId = req.user._id.toString();
     if (!rateCheck('report:' + reporterId, 20, 24 * 60 * 60 * 1000)) return res.status(429).json({ error: 'You have sent a lot of reports today. Please try again tomorrow.' });
-    const biz = await businessesCol.findOne({ _id: new ObjectId(bizId) }, { projection: { name: 1, reviews: 1 } });
+    const biz = await businessesCol.findOne({ _id: new ObjectId(bizId) }, { projection: { name: 1, reviews: 1, ownerId: 1 } });
     if (!biz) return res.status(404).json({ error: 'Business not found.' });
     if (type === 'review' && !(biz.reviews || []).some(r => String(r._id) === targetId)) return res.status(404).json({ error: 'Review not found.' });
     if (type === 'photo' && !(photosCol && await photosCol.findOne({ _id: new ObjectId(targetId), bizId }))) return res.status(404).json({ error: 'Photo not found.' });
     const already = await reportsCol.findOne({ reporterId, type, bizId, targetId, status: 'open' });
     if (!already){
       const reason = REPORT_REASONS.includes(b.reason) ? b.reason : 'Other';
-      await reportsCol.insertOne({ type, bizId, targetId, reason, details: String(b.details || '').trim().slice(0, 500), reporterId, reporterEmail: req.user.email, status: 'open', createdAt: new Date() });
+      let targetUserId = '';
+      if (type === 'business') targetUserId = biz.ownerId || '';
+      else if (type === 'review'){ const rv = (biz.reviews || []).find(r => String(r._id) === targetId); targetUserId = (rv && rv.authorId) || ''; }
+      else { const ph = await photosCol.findOne({ _id: new ObjectId(targetId) }, { projection: { userId: 1 } }); targetUserId = (ph && ph.userId) || ''; }
+      await reportsCol.insertOne({ type, bizId, targetId, targetUserId, reason, details: String(b.details || '').trim().slice(0, 500), reporterId, reporterEmail: req.user.email, status: 'open', createdAt: new Date() });
       if (process.env.ADMIN_EMAIL) sendMail(process.env.ADMIN_EMAIL, `New report: ${type} on ${biz.name}`, `<p>A <b>${type}</b> on <b>${escapeHtml(biz.name)}</b> was reported.</p><p><b>Reason:</b> ${escapeHtml(reason)}</p>${b.details ? `<p><b>Note:</b> ${escapeHtml(String(b.details).trim().slice(0, 500))}</p>` : ''}<p><a href="${siteUrl(req)}/admin.html">Open the admin page to review it</a></p>`);
     }
     res.json({ ok: true });
@@ -1458,9 +1492,18 @@ app.get('/api/admin/reports', requireAdmin, async (req, res) => {
     const list = await reportsCol.find({ status: 'open' }).sort({ createdAt: -1 }).limit(100).toArray();
     const out = [];
     for (const r of list){
-      const item = { _id: r._id.toString(), type: r.type, bizId: r.bizId, reason: r.reason, details: r.details, reporterEmail: r.reporterEmail, createdAt: r.createdAt, bizName: '', preview: '', imageUrl: '', gone: false };
+      const item = { _id: r._id.toString(), type: r.type, bizId: r.bizId, reason: r.reason, details: r.details, reporterEmail: r.reporterEmail, createdAt: r.createdAt, bizName: '', preview: '', imageUrl: '', gone: false, targetUserId: r.targetUserId || '', targetEmail: '', targetBanned: false };
       try {
-        const biz = await businessesCol.findOne({ _id: new ObjectId(r.bizId) }, { projection: { name: 1, reviews: 1 } });
+        const biz = await businessesCol.findOne({ _id: new ObjectId(r.bizId) }, { projection: { name: 1, reviews: 1, ownerId: 1 } });
+        if (!item.targetUserId && biz){
+          if (r.type === 'business') item.targetUserId = biz.ownerId || '';
+          else if (r.type === 'review'){ const rv = (biz.reviews || []).find(x => String(x._id) === r.targetId); item.targetUserId = (rv && rv.authorId) || ''; }
+          else { const ph0 = await photosCol.findOne({ _id: new ObjectId(r.targetId) }, { projection: { userId: 1 } }); item.targetUserId = (ph0 && ph0.userId) || ''; }
+        }
+        if (item.targetUserId){
+          const tu = await usersCol.findOne({ _id: new ObjectId(item.targetUserId) }, { projection: { email: 1, banned: 1 } });
+          if (tu){ item.targetEmail = tu.email; item.targetBanned = !!tu.banned; }
+        }
         item.bizName = biz ? biz.name : '';
         if (!biz) item.gone = true;
         else if (r.type === 'review'){
@@ -1474,6 +1517,57 @@ app.get('/api/admin/reports', requireAdmin, async (req, res) => {
       out.push(item);
     }
     res.json(out);
+  } catch (err) { res.json([]); }
+});
+
+// ---------------- Warnings and bans (admin) ----------------
+app.post('/api/admin/users/:id/warn', requireAdmin, async (req, res) => {
+  if (!usersCol) return res.status(503).json({ error: 'Database not connected' });
+  try {
+    const message = String((req.body || {}).message || '').trim().slice(0, 500);
+    const bizName = String((req.body || {}).bizName || '').trim().slice(0, 120);
+    if (!message) return res.status(400).json({ error: 'Write a short warning first.' });
+    const user = await usersCol.findOne({ _id: new ObjectId(req.params.id) });
+    if (!user) return res.status(404).json({ error: 'That account no longer exists.' });
+    const warning = { _id: new ObjectId(), message, bizName, createdAt: new Date(), seen: false };
+    await usersCol.updateOne({ _id: user._id }, { $push: { warnings: { $each: [warning], $slice: -20 } } });
+    sendMail(user.email, 'A warning about your TT Discover account',
+      `<p>Hello,</p><p>We received a report${bizName ? ` about <b>${escapeHtml(bizName)}</b>` : ''} on TT Discover and want to give you a friendly warning:</p><p style="padding:10px 14px;background:#fff3cd;border-radius:8px;">${escapeHtml(message).replace(/\n/g, '<br>')}</p><p>If this was a mistake, please fix it. Repeated problems can lead to your account being suspended.</p>`);
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ error: 'Could not send the warning.' }); }
+});
+
+app.post('/api/admin/users/:id/ban', requireAdmin, async (req, res) => {
+  if (!usersCol) return res.status(503).json({ error: 'Database not connected' });
+  try {
+    const reason = String((req.body || {}).reason || '').trim().slice(0, 500);
+    if (!reason) return res.status(400).json({ error: 'Write the reason for the ban first.' });
+    const user = await usersCol.findOne({ _id: new ObjectId(req.params.id) });
+    if (!user) return res.status(404).json({ error: 'That account no longer exists.' });
+    await usersCol.updateOne({ _id: user._id }, { $set: { banned: { reason, at: new Date() } }, $unset: { appeal: '' } });
+    sendMail(user.email, 'Your TT Discover account has been suspended',
+      `<p>Hello,</p><p>Your TT Discover account has been suspended.</p><p><b>Reason:</b> ${escapeHtml(reason)}</p><p>If you think this was a mistake, sign in at <a href="${siteUrl(req)}/account.html">${siteUrl(req)}/account.html</a> and write us a note explaining why. We will read it.</p>`);
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ error: 'Could not ban this account.' }); }
+});
+
+app.post('/api/admin/users/:id/unban', requireAdmin, async (req, res) => {
+  if (!usersCol) return res.status(503).json({ error: 'Database not connected' });
+  try {
+    const user = await usersCol.findOne({ _id: new ObjectId(req.params.id) });
+    if (!user) return res.status(404).json({ error: 'That account no longer exists.' });
+    await usersCol.updateOne({ _id: user._id }, { $unset: { banned: '', appeal: '' } });
+    sendMail(user.email, 'Your TT Discover account is active again',
+      `<p>Hello,</p><p>Your TT Discover account has been restored and you can use it again. Please follow the <a href="${siteUrl(req)}/terms.html">terms of use</a> so this does not happen again.</p>`);
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ error: 'Could not unban this account.' }); }
+});
+
+app.get('/api/admin/banned', requireAdmin, async (req, res) => {
+  if (!usersCol) return res.json([]);
+  try {
+    const list = await usersCol.find({ banned: { $exists: true } }).sort({ 'banned.at': -1 }).limit(200).toArray();
+    res.json(list.map(u => ({ id: u._id.toString(), email: u.email, reason: u.banned.reason || '', at: u.banned.at, appeal: u.appeal ? { message: u.appeal.message, createdAt: u.appeal.createdAt } : null })));
   } catch (err) { res.json([]); }
 });
 
