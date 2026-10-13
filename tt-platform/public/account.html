@@ -196,12 +196,6 @@
   .studioProfileName { font-weight: 700; font-size: 14px; }
   .studioProfileEmail { font-size: 11px; color: var(--text-muted); word-break: break-all; margin-top: 2px; }
   #studioNav { display: flex; flex-direction: column; }
-  .colorWheel { width: 38px; height: 38px; border-radius: 50%; overflow: hidden; cursor: pointer; display: inline-block; position: relative;
-    background: conic-gradient(#ff3b30, #ff9500, #ffcc00, #34c759, #00c7be, #007aff, #af52de, #ff3b30); border: 2px solid var(--border); flex-shrink: 0; }
-  .colorWheel input { position: absolute; inset: -8px; width: 60px; height: 60px; opacity: 0; cursor: pointer; border: 0; padding: 0; }
-  .colorWheel:focus-within { outline: 2px solid #e0562f; outline-offset: 2px; }
-  .swatch { margin: 0; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--border); cursor: pointer; padding: 0; }
-  .swatch.sel { outline: 2px solid #e0562f; outline-offset: 2px; }
   .studioNavItem {
     display: block; width: 100%; text-align: left; background: none; border: none;
     padding: 11px 16px; font-size: 13px; font-weight: 600; color: var(--text-muted3); cursor: pointer;
@@ -533,19 +527,7 @@
             <div id="designCards"></div>
             <p style="font-size:12px;color:var(--text-muted);margin-top:10px;">More designs are coming soon.</p>
 
-            <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">
-              <div style="font-size:14px;font-weight:700;margin-bottom:4px;">Page colour</div>
-              <p style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px;">Make it yours. Tap the colour wheel or a swatch and the preview below changes. Try the colour of your food or your logo.</p>
-              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                <label class="colorWheel" title="Pick any colour"><input type="color" id="brandColorInput" aria-label="Pick a page colour"></label>
-                <div id="brandSwatches" style="display:flex;gap:7px;flex-wrap:wrap;"></div>
-                <button type="button" id="brandResetBtn" style="background:var(--soft-bg);color:var(--text);padding:7px 12px;font-size:12px;border-radius:16px;width:auto;margin:0;">Use design colours</button>
-              </div>
-              <div id="colorPreviewWrap" style="margin-top:14px;border:1px solid var(--border);border-radius:12px;overflow:hidden;position:relative;background:var(--card-bg);">
-                <iframe id="colorPreview" title="Preview of your page" style="border:0;width:1000px;height:760px;transform-origin:0 0;pointer-events:none;" loading="lazy"></iframe>
-              </div>
-              <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">A small preview. Use "View it" below to see the full page. Remember to save to keep your colour.</div>
-            </div>
+            <div id="brandMount" style="margin-top:18px;"></div>
             <button type="button" id="viewItBtn" style="margin-top:14px;background:var(--soft-bg);color:var(--text);">View it</button>
             <div class="hint" style="font-size:12px;color:var(--text-muted);margin-top:6px;">Opens a preview of your page with everything you've added so far. Come back here to change or remove anything.</div>
           </div>
@@ -666,6 +648,7 @@
 <script src="/premium.js"></script>
 <script src="/areas.js"></script>
 <script src="/ui.js"></script>
+<script src="/brandpicker.js"></script>
 <script src="/hours.js"></script>
 <script>
 let token = localStorage.getItem('ttp_token') || '';
@@ -699,13 +682,18 @@ document.getElementById('studioTopAvatar').addEventListener('click', () => {
 // ---------------- Business Designs picker + "View it" preview ----------------
 const DESIGNS = [{ id: 'food', name: 'Food', blurb: 'Blue sidebar with Menu, Highlights, Reviews and Photos pages. Great for restaurants, bakeries and food trucks.', swatch: '#23659b' }, { id: 'fabric', name: 'Clothing and fabric', blurb: 'Warm brown and cream with a big bold name, a photo collage and a gallery. Great for boutiques, tailors and fabric shops.', swatch: '#2a1810' }, { id: 'beauty', name: 'Beauty', blurb: 'Soft rose and cream with an elegant name, a big hero photo and a Services price list. Great for salons, barbers, nail techs, spas and makeup artists.', swatch: '#7a3b4b' }, { id: 'build', name: 'Construction', blurb: 'Bold charcoal and safety yellow with a hero banner, a Services list, a Projects gallery and a one-tap Call button. Great for builders, plumbers, electricians and contractors.', swatch: '#f5b000' }];
 let chosenDesign = 'food';
+const brandPicker = ttBrandPicker({
+  mount: document.getElementById('brandMount'),
+  getDraft: () => currentDraft(),
+  getSwatch: () => (DESIGNS.find(d => d.id === chosenDesign) || DESIGNS[0]).swatch
+});
 function paintDesignCards(){
   document.getElementById('designCards').innerHTML = DESIGNS.map(d => `
     <button type="button" class="designCard" data-id="${d.id}" aria-pressed="${d.id === chosenDesign}" style="display:flex;gap:12px;align-items:center;width:100%;text-align:left;margin:0 0 8px;padding:12px;border-radius:10px;background:var(--card-bg);color:var(--text);border:2px solid ${d.id === chosenDesign ? '#e0562f' : 'var(--input-border)'};">
       <span style="width:44px;height:44px;border-radius:8px;background:${d.swatch};flex-shrink:0;"></span>
       <span><b>${d.name}</b>${d.id === chosenDesign ? ' ✓' : ''}<br><span style="font-size:12px;color:var(--text-muted);font-weight:400;">${d.blurb}</span></span>
     </button>`).join('');
-  document.querySelectorAll('.designCard').forEach(b => b.addEventListener('click', () => { chosenDesign = b.dataset.id; paintDesignCards(); if (typeof setBrand === 'function'){ setBrand(chosenColor); refreshColorPreview(); } }));
+  document.querySelectorAll('.designCard').forEach(b => b.addEventListener('click', () => { chosenDesign = b.dataset.id; paintDesignCards(); brandPicker.designChanged(); }));
 }
 paintDesignCards();
 function currentDraft(){
@@ -715,7 +703,7 @@ function currentDraft(){
     phone: v('bPhone'), email: v('bEmail'), hours: hoursState,
     imageUrl: photosState[0] || v('bImageUrl'), photos: photosState, menuPhotos: menuPhotosState, highlights: highlightsState,
     social: { facebook: v('bSocialFacebook'), instagram: v('bSocialInstagram'), website: v('bSocialWebsite') },
-    template: chosenDesign, brandColor: chosenColor, reviews: [], deals: []
+    template: chosenDesign, brandColor: brandPicker.get(), reviews: [], deals: []
   };
 }
 document.getElementById('viewItBtn').addEventListener('click', () => {
@@ -723,58 +711,6 @@ document.getElementById('viewItBtn').addEventListener('click', () => {
   catch (e) { document.getElementById('addMsg').textContent = 'Your photos are too big to preview. Try fewer or smaller photos.'; return; }
   window.open('/biz.html?preview=1', '_blank');
 });
-
-// ---------------- Page colour picker with live preview ----------------
-const BRAND_SWATCHES = ['#c0392b', '#e67e22', '#f1c40f', '#27ae60', '#16a085', '#2980b9', '#8e44ad', '#d81b60', '#5d4037', '#37474f'];
-let chosenColor = '';
-const brandInput = document.getElementById('brandColorInput');
-function paintBrandSwatches(){
-  const box = document.getElementById('brandSwatches');
-  box.innerHTML = '';
-  BRAND_SWATCHES.forEach(c => {
-    const b = document.createElement('button');
-    b.type = 'button'; b.className = 'swatch' + (chosenColor === c ? ' sel' : ''); b.style.background = c; b.title = c; b.setAttribute('aria-label', 'Use colour ' + c);
-    b.addEventListener('click', () => setBrand(c));
-    box.appendChild(b);
-  });
-}
-function sendBrandToPreview(){
-  const f = document.getElementById('colorPreview');
-  try { f.contentWindow.postMessage({ ttBrand: chosenColor }, location.origin); } catch (e) {}
-}
-function setBrand(c){
-  chosenColor = c || '';
-  brandInput.value = chosenColor || (DESIGNS.find(d => d.id === chosenDesign) || DESIGNS[0]).swatch;
-  paintBrandSwatches();
-  sendBrandToPreview();
-}
-brandInput.addEventListener('input', () => setBrand(brandInput.value));
-document.getElementById('brandResetBtn').addEventListener('click', () => setBrand(''));
-document.getElementById('colorPreview').addEventListener('load', sendBrandToPreview);
-
-function fitColorPreview(){
-  const wrap = document.getElementById('colorPreviewWrap'), f = document.getElementById('colorPreview');
-  const w = wrap.clientWidth; if (!w) return;
-  const scale = Math.min(1, w / 1000);
-  f.style.transform = 'scale(' + scale + ')';
-  wrap.style.height = Math.round(760 * scale) + 'px';
-}
-function refreshColorPreview(){
-  const f = document.getElementById('colorPreview');
-  let draft = currentDraft();
-  try { localStorage.setItem('ttp_preview_draft', JSON.stringify(draft)); }
-  catch (e) {
-    draft = { ...draft, imageUrl: '', photos: [], menuPhotos: [], highlights: [] };
-    try { localStorage.setItem('ttp_preview_draft', JSON.stringify(draft)); } catch (e2) { return; }
-  }
-  fitColorPreview();
-  f.src = '/biz.html?preview=1&embed=1&t=' + Date.now();
-}
-window.addEventListener('resize', fitColorPreview);
-document.querySelectorAll('.studioNavItem').forEach(btn => btn.addEventListener('click', () => {
-  if (btn.dataset.group === 'designs') setTimeout(refreshColorPreview, 50);
-}));
-setBrand(chosenColor);
 
 
 // ---------------- Dismissible "edit in Settings" note ----------------
@@ -1723,7 +1659,7 @@ function populateStudioForm(biz){
   currentBizIsOwner = (biz.ownerId === myUserId);
   updateHiringToggleUI(!!biz.hiring);
   chosenDesign = biz.template || 'food'; paintDesignCards();
-  setBrand(biz.brandColor || '');
+  brandPicker.set(biz.brandColor || ''); brandPicker.designChanged();
   document.getElementById('bName').value = biz.name || '';
   document.getElementById('bCategory').value = biz.category || '';
   document.getElementById('bDescription').value = biz.description || '';
@@ -1759,7 +1695,7 @@ function clearStudioForm(){
   currentBizId = null;
   currentBizIsOwner = true;
   chosenDesign = 'food'; paintDesignCards();
-  setBrand('');
+  brandPicker.set('');
   updateHiringToggleUI(false);
   ['bName','bCategory','bDescription','bAddress','bArea','bPhone','bEmail','bImageUrl',
    'aboutAccessibility','aboutServiceOptions','aboutPopularFor','aboutOfferings','aboutDiningOptions',
@@ -1817,7 +1753,7 @@ document.getElementById('addBizBtn').addEventListener('click', async () => {
     menuPhotos: menuPhotosState,
     highlights: highlightsState,
     template: chosenDesign,
-    brandColor: chosenColor,
+    brandColor: brandPicker.get(),
     about: {
       accessibility: document.getElementById('aboutAccessibility').value,
       serviceOptions: document.getElementById('aboutServiceOptions').value,
