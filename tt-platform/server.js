@@ -789,6 +789,9 @@ app.post('/api/premium/paypal/confirm', requireUser, async (req, res) => {
 });
 
 // Strips staff credentials before sending a business doc to the browser.
+// A page colour picked by the owner, like #1a8f5c. Anything else means "use the design's own colours".
+function sanitizeColor(v){ return /^#[0-9a-fA-F]{6}$/.test(String(v || '')) ? String(v).toLowerCase() : ''; }
+
 function publicBiz(biz){
   if (!biz) return biz;
   const out = { ...biz };
@@ -890,6 +893,7 @@ app.post('/api/my/businesses', requireUser, requireVerified, requireBusinessAcco
       menuPhotos: sanitizePhotoArray(b.menuPhotos),
       highlights: sanitizePhotoArray(b.highlights),
       template: TEMPLATES.includes(b.template) ? b.template : 'food',
+      brandColor: sanitizeColor(b.brandColor),
       about: sanitizeAbout(b.about),
       social: sanitizeSocial(b.social),
       hiring: !!b.hiring,
@@ -960,6 +964,7 @@ app.put('/api/my/businesses/:id', requireUser, requireBusinessAccount, async (re
     if (Array.isArray(b.highlights)) update.highlights = sanitizePhotoArray(b.highlights);
     if (typeof b.hiring === 'boolean') update.hiring = b.hiring;
     if (TEMPLATES.includes(b.template)) update.template = b.template;
+    if (typeof b.brandColor === 'string') update.brandColor = sanitizeColor(b.brandColor);
     if (typeof b.tagline === 'string') update.tagline = b.tagline.trim().slice(0, 60);
     if (typeof b.logoUrl === 'string') update.logoUrl = b.logoUrl.slice(0, 400000);
     if (Array.isArray(b.highlightNames)) update.highlightNames = b.highlightNames.slice(0, 10).map(n => String(n || '').trim().slice(0, 40));

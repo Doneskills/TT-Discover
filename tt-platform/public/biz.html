@@ -47,6 +47,7 @@
   #previewBar.show { display: block; }
   .shell { display: grid; grid-template-columns: 230px minmax(0, 1fr); min-height: 100vh; }
   .side { background: var(--primary); color: #f2f0eb; padding: 28px 18px; position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; align-items: center; text-align: center; }
+  html.embed #previewBar { display: none; }
   .logo { width: 84px; height: 84px; border-radius: 50%; background: #f2f0eb; border: 3px solid var(--accent); overflow: hidden; display: flex; align-items: center; justify-content: center; font-family: var(--head); font-size: 34px; color: var(--primary); flex-shrink: 0; }
   .logo img { width: 100%; height: 100%; object-fit: cover; }
   .sideName { font-family: var(--head); font-size: 20px; text-transform: uppercase; margin: 12px 0 18px; letter-spacing: .5px; }
@@ -183,7 +184,7 @@
   body[data-template="beauty"] .tile { border-radius: 22px; border-bottom: none; }
   body[data-template="beauty"] .logo { border-color: var(--accent); }
   body[data-template="build"] .nav a { border-radius: 0; border-left: 5px solid transparent; text-transform: uppercase; font-weight: 600; letter-spacing: .5px; }
-  body[data-template="build"] .nav a.active { background: var(--accent); color: #111; border-left-color: #111; }
+  body[data-template="build"] .nav a.active { background: var(--accent); color: var(--onAccent, #111); border-left-color: #111; }
   body[data-template="build"] .nav a:hover { background: rgba(255,255,255,.1); }
   body[data-template="build"] .tile { border-radius: 0; border-bottom: 6px solid var(--accent); }
   body[data-template="build"] .btn, body[data-template="build"] .pill, body[data-template="build"] .chip { border-radius: 2px; }
@@ -192,7 +193,7 @@
   .svHero::before { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.12) 0%, rgba(0,0,0,.72) 100%); }
   body[data-template="beauty"] .svHero.noimg { background: linear-gradient(135deg, #7a3b4b, #c9967a); }
   body[data-template="build"] .svHero.noimg { background: #222; }
-  body[data-template="build"] .svHero { border-bottom: 10px solid transparent; border-image: repeating-linear-gradient(135deg, #f5b000 0 16px, #1d1d1b 16px 32px) 10; }
+  body[data-template="build"] .svHero { border-bottom: 10px solid transparent; border-image: repeating-linear-gradient(135deg, var(--accent) 0 16px, #1d1d1b 16px 32px) 10; }
   .svHeroIn { position: relative; padding: 44px 40px 34px; width: 100%; }
   .svKicker { font-size: 13px; letter-spacing: 3px; text-transform: uppercase; color: var(--accent); font-weight: 700; margin-bottom: 8px; }
   .svHero h1.title { color: #fff; font-size: clamp(34px, 6vw, 64px); }
@@ -202,7 +203,7 @@
   .svBtns { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; }
   .svBtn { display: inline-block; text-decoration: none; padding: 12px 24px; font-weight: 700; font-size: 15px; background: var(--accent); color: #fff; }
   body[data-template="beauty"] .svBtn { border-radius: 26px; }
-  body[data-template="build"] .svBtn { border-radius: 2px; color: #111; text-transform: uppercase; letter-spacing: .6px; }
+  body[data-template="build"] .svBtn { border-radius: 2px; color: var(--onAccent, #111); text-transform: uppercase; letter-spacing: .6px; }
   .svBtn.ghost { background: transparent; border: 2px solid rgba(255,255,255,.7); color: #fff !important; padding: 10px 22px; }
   .svBody { padding: 30px 40px 60px; }
   .svInfo { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-bottom: 26px; }
@@ -712,6 +713,55 @@ window.addEventListener('hashchange', render);
 if (embed && embedMinH) document.querySelector('.shell').style.minHeight = embedMinH + 'px';
 if (embed && window.ResizeObserver) new ResizeObserver(sendHeight).observe(document.querySelector('.shell'));
 
+
+// ---------------- Owner-picked page colour ----------------
+function hexToHsl(hex){
+  const r = parseInt(hex.slice(1, 3), 16) / 255, g = parseInt(hex.slice(3, 5), 16) / 255, b = parseInt(hex.slice(5, 7), 16) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  let h = 0, s = 0;
+  if (d){
+    s = d / (1 - Math.abs(2 * l - 1));
+    h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h = Math.round(h * 60); if (h < 0) h += 360;
+  }
+  return [h, Math.round(s * 100), Math.round(l * 100)];
+}
+function hexLum(hex){
+  const f = i => { const v = parseInt(hex.slice(i, i + 2), 16) / 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); };
+  return .2126 * f(1) + .7152 * f(3) + .0722 * f(5);
+}
+// Overrides the design's own colours on the page. An empty value goes back to the design's colours.
+function applyBrand(hex){
+  const st = document.body.style;
+  ['--primary', '--primary-soft', '--accent', '--line', '--title', '--onAccent'].forEach(k => st.removeProperty(k));
+  if (!/^#[0-9a-f]{6}$/i.test(hex || '')) return;
+  const t = document.body.dataset.template || 'food';
+  const dk = document.documentElement.getAttribute('data-theme') === 'dark';
+  const [h, s0] = hexToHsl(hex);
+  const s = Math.max(25, Math.min(s0, 75));
+  const c = (sat, l) => 'hsl(' + h + ', ' + sat + '%, ' + l + '%)';
+  const set = (k, v) => st.setProperty(k, v);
+  const vivid = c(Math.max(s0, 55), dk ? 62 : 46);
+  if (t === 'build'){
+    set('--accent', hex); set('--line', hex); set('--onAccent', hexLum(hex) > .4 ? '#111' : '#fff');
+  } else if (t === 'beauty'){
+    set('--primary', c(s, dk ? 16 : 32)); set('--title', c(s, dk ? 82 : 32)); set('--primary-soft', c(s, dk ? 28 : 42));
+    set('--accent', vivid); set('--line', c(s, dk ? 38 : 84));
+  } else if (t === 'fabric'){
+    set('--primary', c(s, dk ? 9 : 14)); set('--primary-soft', c(s, dk ? 24 : 24)); set('--title', c(s, dk ? 88 : 14));
+    set('--accent', vivid); set('--line', vivid);
+  } else {
+    set('--primary', c(s, dk ? 20 : 30)); set('--primary-soft', c(s, dk ? 30 : 40)); set('--title', c(s, dk ? 72 : 34)); set('--accent', vivid); set('--line', c(s, dk ? 42 : 30));
+  }
+}
+new MutationObserver(() => { if (biz) applyBrand(biz.brandColor); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+// Business Studio sends the colour being tried so its preview changes live.
+window.addEventListener('message', e => {
+  if (e.origin !== location.origin || !previewMode || !biz) return;
+  const d = e.data || {};
+  if (typeof d.ttBrand === 'string'){ biz.brandColor = d.ttBrand; applyBrand(d.ttBrand); }
+});
+
 (async function init(){
   if (previewMode){
     try { biz = JSON.parse(localStorage.getItem('ttp_preview_draft') || 'null'); } catch (e) { biz = null; }
@@ -720,6 +770,7 @@ if (embed && window.ResizeObserver) new ResizeObserver(sendHeight).observe(docum
     $('previewBar').classList.add('show');
     document.title = 'Preview — ' + biz.name;
     document.body.dataset.template = biz.template || 'food';
+    applyBrand(biz.brandColor);
     document.body.classList.add('ready'); render();
     return;
   }
@@ -731,6 +782,7 @@ if (embed && window.ResizeObserver) new ResizeObserver(sendHeight).observe(docum
   biz = b; me = u;
   document.title = biz.name + ' — TT Discover';
   document.body.dataset.template = biz.template || 'food';
+  applyBrand(biz.brandColor);
   document.body.classList.add('ready'); render();
 })();
 </script>
