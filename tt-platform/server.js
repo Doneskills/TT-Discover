@@ -316,6 +316,7 @@ function requireBizPermission(permission){
     const ownerToken = req.headers['x-auth-token'];
     if (ownerToken && usersCol){
       const user = await usersCol.findOne({ sessionToken: ownerToken });
+      if (user && user.banned) return res.status(403).json({ banned: true, error: 'Your account has been suspended.' });
       if (user && canManageBiz(biz, user._id.toString())){
         req.biz = biz;
         req.actor = { type: 'owner' };
@@ -862,7 +863,12 @@ app.delete('/api/businesses/:id/photos/:photoId', requireUser, async (req, res) 
   } catch (err) { res.status(400).json({ error: 'Could not remove photo.' }); }
 });
 
-const TEMPLATES = ['food', 'fabric', 'beauty', 'build'];
+const TEMPLATES = ['food', 'fabric', 'beauty', 'build', 'bar', 'learn', 'farm', 'office'];
+// Designs only Premium businesses can pick. A page that already uses one keeps it if the plan ends.
+const PREMIUM_TEMPLATES = ['bar', 'learn', 'farm', 'office'];
+function templateAllowed(template, ownerUser, existingTemplate){
+  return !PREMIUM_TEMPLATES.includes(template) || template === existingTemplate || effectivePlan(ownerUser) === 'premium';
+}
 app.post('/api/my/businesses', requireUser, requireVerified, requireBusinessAccount, async (req, res) => {
   if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
   try {
@@ -892,7 +898,7 @@ app.post('/api/my/businesses', requireUser, requireVerified, requireBusinessAcco
       photos: sanitizePhotoArray(b.photos),
       menuPhotos: sanitizePhotoArray(b.menuPhotos),
       highlights: sanitizePhotoArray(b.highlights),
-      template: TEMPLATES.includes(b.template) ? b.template : 'food',
+      template: TEMPLATES.includes(b.template) && templateAllowed(b.template, req.user, '') ? b.template : 'food',
       brandColor: sanitizeColor(b.brandColor),
       about: sanitizeAbout(b.about),
       social: sanitizeSocial(b.social),
@@ -963,7 +969,10 @@ app.put('/api/my/businesses/:id', requireUser, requireBusinessAccount, async (re
     if (Array.isArray(b.menuPhotos)) update.menuPhotos = sanitizePhotoArray(b.menuPhotos);
     if (Array.isArray(b.highlights)) update.highlights = sanitizePhotoArray(b.highlights);
     if (typeof b.hiring === 'boolean') update.hiring = b.hiring;
-    if (TEMPLATES.includes(b.template)) update.template = b.template;
+    if (TEMPLATES.includes(b.template)){
+      if (!templateAllowed(b.template, ownerUser, biz.template)) return res.status(403).json({ error: 'That design is for Premium businesses. Pick one of the free designs, or upgrade to Premium.' });
+      update.template = b.template;
+    }
     if (typeof b.brandColor === 'string') update.brandColor = sanitizeColor(b.brandColor);
     if (typeof b.tagline === 'string') update.tagline = b.tagline.trim().slice(0, 60);
     if (typeof b.logoUrl === 'string') update.logoUrl = b.logoUrl.slice(0, 400000);
@@ -1044,13 +1053,9 @@ app.delete('/api/my/businesses/:id/posts/:postId', requireBizPermission('posts')
 });
 
 
-app.post('/api/my/businesses/:id/jobs', requireUser, requireBusinessAccount, async (req, res) => {
-  if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
+app.post('/api/my/businesses/:id/jobs', requireBizPermission('jobs'), async (req, res) => {
   try {
-    const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
-    if (!canManageBiz(biz, req.user._id.toString())){
-      return res.status(403).json({ error: 'You can only post jobs for a business you own or collaborate on.' });
-    }
+    const biz = req.biz;
     const b = req.body || {};
     const title = String(b.title || '').trim().slice(0, 100);
     if (!title) return res.status(400).json({ error: 'A job title is required.' });
@@ -1072,13 +1077,9 @@ app.post('/api/my/businesses/:id/jobs', requireUser, requireBusinessAccount, asy
   }
 });
 
-app.delete('/api/my/businesses/:id/jobs/:jobId', requireUser, requireBusinessAccount, async (req, res) => {
-  if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
+app.delete('/api/my/businesses/:id/jobs/:jobId', requireBizPermission('jobs'), async (req, res) => {
   try {
-    const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
-    if (!canManageBiz(biz, req.user._id.toString())){
-      return res.status(403).json({ error: 'You can only edit a business you own or collaborate on.' });
-    }
+    const biz = req.biz;
     await businessesCol.updateOne({ _id: biz._id }, { $pull: { jobs: { _id: new ObjectId(req.params.jobId) } } });
     res.json({ ok: true });
   } catch (err) {
@@ -1116,13 +1117,9 @@ app.post('/api/businesses/:id/reviews', requireUser, requireVerified, async (req
 });
 
 // Owner reply to a review on their own business — one reply per review.
-app.post('/api/my/businesses/:id/reviews/:reviewId/reply', requireUser, requireBusinessAccount, async (req, res) => {
-  if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
+app.post('/api/my/businesses/:id/reviews/:reviewId/reply', requireBizPermission('reviews'), async (req, res) => {
   try {
-    const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) });
-    if (!canManageBiz(biz, req.user._id.toString())){
-      return res.status(403).json({ error: 'You can only reply to reviews on a business you own or collaborate on.' });
-    }
+    const biz = req.biz;
     const text = String((req.body || {}).text || '').trim().slice(0, 600);
     if (!text) return res.status(400).json({ error: 'A reply message is required.' });
     const reply = { text, createdAt: new Date() };
@@ -1138,6 +1135,36 @@ app.post('/api/my/businesses/:id/reviews/:reviewId/reply', requireUser, requireB
 });
 
 // Post a new deal on an existing business — emails customers who follow that area.
+// Gallery photos: the owner, or staff who were given the "photos" permission.
+app.put('/api/my/businesses/:id/photos', requireBizPermission('photos'), async (req, res) => {
+  try {
+    const biz = req.biz;
+    const b = req.body || {};
+    if (!Array.isArray(b.photos)) return res.status(400).json({ error: 'Nothing to update.' });
+    const ownerUser = await usersCol.findOne({ _id: new ObjectId(biz.ownerId) });
+    const photoErr = photoLimitError({ photos: b.photos }, effectivePlan(ownerUser), biz);
+    if (photoErr) return res.status(403).json({ error: photoErr });
+    const photos = sanitizePhotoArray(b.photos);
+    await businessesCol.updateOne({ _id: biz._id }, { $set: { photos } });
+    res.json({ ok: true, photos });
+  } catch (err) { res.status(500).json({ error: 'Could not save photos.' }); }
+});
+
+// Opening hours and phone/email: the owner, or staff with the "info" permission.
+app.put('/api/my/businesses/:id/info', requireBizPermission('info'), async (req, res) => {
+  try {
+    const biz = req.biz;
+    const b = req.body || {};
+    const update = {};
+    if (typeof b.phone === 'string') update.phone = b.phone.slice(0, 40);
+    if (typeof b.email === 'string') update.email = b.email.slice(0, 150);
+    if (b.hours) update.hours = sanitizeHours(b.hours);
+    if (!Object.keys(update).length) return res.status(400).json({ error: 'Nothing to update.' });
+    await businessesCol.updateOne({ _id: biz._id }, { $set: update });
+    res.json({ ok: true, ...update });
+  } catch (err) { res.status(500).json({ error: 'Could not save.' }); }
+});
+
 app.post('/api/my/businesses/:id/deals', requireBizPermission('deals'), async (req, res) => {
   try {
     const biz = req.biz;
@@ -1196,7 +1223,7 @@ app.post('/api/my/businesses/:id/staff', requireUser, requireBusinessAccount, as
       _id: new ObjectId(),
       email,
       passwordHash,
-      permissions: { posts: !!b.posts, deals: !!b.deals },
+      permissions: { posts: !!b.posts, deals: !!b.deals, jobs: !!b.jobs, photos: !!b.photos, info: !!b.info, reviews: !!b.reviews },
       sessionToken: null,
       createdAt: new Date()
     };

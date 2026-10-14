@@ -8,7 +8,7 @@
 <script>try { if (localStorage.getItem('tt_theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500&family=Poppins:wght@400;500;600;700;800&family=Great+Vibes&family=Playfair+Display:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500&family=Poppins:wght@400;500;600;700;800&family=Great+Vibes&family=Playfair+Display:wght@500;700&family=Bebas+Neue&family=Merriweather:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root {
     --surface: var(--surface); --divider: var(--divider); --track: var(--track); --starOff: var(--starOff); --fieldBorder: var(--fieldBorder); --field: #ffffff;
@@ -189,6 +189,96 @@
   body[data-template="build"] .tile { border-radius: 0; border-bottom: 6px solid var(--accent); }
   body[data-template="build"] .btn, body[data-template="build"] .pill, body[data-template="build"] .chip { border-radius: 2px; }
   body[data-template="build"] .logo { border-color: var(--accent); border-radius: 6px; }
+
+  /* ---------- Premium designs: Bar and nightlife, Classes, Farm and market, Professional ---------- */
+  body[data-template="bar"] {
+    --bg: #f4eef9; --text: #231433; --muted: #6e5c86; --surface: #e8dcf4; --divider: #d8c6ea; --track: #d8c6ea; --field: #ffffff;
+    --fieldBorder: #bba3d6; --title: #4a1d8a; --primary: #1a1030; --primary-soft: #2e1f52; --accent: #d81b86; --line: #b388eb;
+    --dealBg: #f7dff0; --ok: #1b8a5a; --bad: #c62828; --star: #f2b01e; --starOff: #cdbfe0;
+    --head: 'Bebas Neue', 'Oswald', Impact, sans-serif;
+  }
+  [data-theme="dark"] body[data-template="bar"] {
+    --bg: #0d0818; --text: #f1e8fb; --muted: #b7a6cf; --surface: #1b1030; --divider: #2f2150; --track: #2f2150; --field: #150c26;
+    --fieldBorder: #4a3875; --title: #ff8ed4; --primary: #07030f; --primary-soft: #251645; --accent: #ff3cac; --line: #7b4bd6;
+    --dealBg: #33152b; --ok: #54d69b; --bad: #ff7b7b; --star: #ffd25a; --starOff: #4a3875;
+  }
+  body[data-template="learn"] {
+    --bg: #f3f8ff; --text: #17304f; --muted: #587091; --surface: #e0eeff; --divider: #cfe2fb; --track: #cfe2fb; --field: #ffffff;
+    --fieldBorder: #a9c6ee; --title: #1d5fd1; --primary: #1d5fd1; --primary-soft: #3a78e0; --accent: #f08a00; --line: #9cc3ff;
+    --dealBg: #fff0d6; --ok: #1c8a4a; --bad: #c62828; --star: #f2b01e; --starOff: #cfdcf0;
+  }
+  [data-theme="dark"] body[data-template="learn"] {
+    --bg: #0f1a2b; --text: #e8f0fc; --muted: #9db3d1; --surface: #182a45; --divider: #24395c; --track: #24395c; --field: #132238;
+    --fieldBorder: #38588a; --title: #8fbbff; --primary: #12306b; --primary-soft: #1d4a99; --accent: #ffa733; --line: #3a6bbf;
+    --dealBg: #3a2c14; --ok: #5bd68c; --bad: #ff7b7b; --star: #ffd25a; --starOff: #38588a;
+  }
+  body[data-template="farm"] {
+    --bg: #f7f3e6; --text: #2b2a1c; --muted: #6d6a52; --surface: #ece5cd; --divider: #ddd4b5; --track: #ddd4b5; --field: #fffdf6;
+    --fieldBorder: #c9bf9a; --title: #2f5d34; --primary: #2f5d34; --primary-soft: #46784b; --accent: #d9822b; --line: #b7c79a;
+    --dealBg: #fbe9c9; --ok: #2f7d32; --bad: #b83a2a; --star: #e8a317; --starOff: #d9d1b4;
+    --head: 'Merriweather', Georgia, 'Times New Roman', serif;
+  }
+  [data-theme="dark"] body[data-template="farm"] {
+    --bg: #12160d; --text: #efecd9; --muted: #aeab8f; --surface: #1d2315; --divider: #2f3822; --track: #2f3822; --field: #171c10;
+    --fieldBorder: #46512f; --title: #a9d58a; --primary: #1b3a1f; --primary-soft: #2e5a33; --accent: #f0a04b; --line: #5f7a3e;
+    --dealBg: #3a2f17; --ok: #7fd687; --bad: #ff8b7a; --star: #f4be4a; --starOff: #46512f;
+  }
+  body[data-template="office"] {
+    --bg: #f5f7fa; --text: #15233c; --muted: #5b6a82; --surface: #e8edf4; --divider: #d3dbe7; --track: #d3dbe7; --field: #ffffff;
+    --fieldBorder: #b9c4d6; --title: #14284b; --primary: #14284b; --primary-soft: #263f6b; --accent: #b8914a; --line: #c9d3e0;
+    --dealBg: #f4ead3; --ok: #2d7a4c; --bad: #b3372f; --star: #c99a2e; --starOff: #d3dbe7;
+    --head: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  }
+  [data-theme="dark"] body[data-template="office"] {
+    --bg: #0e1626; --text: #e9eef7; --muted: #9eabc2; --surface: #172238; --divider: #25324d; --track: #25324d; --field: #121c30;
+    --fieldBorder: #3a4a6c; --title: #d9b977; --primary: #0a1222; --primary-soft: #1d2e52; --accent: #d9b977; --line: #3a4a6c;
+    --dealBg: #33301f; --ok: #6fd09a; --bad: #ff8b80; --star: #e0b64a; --starOff: #3a4a6c;
+  }
+  body:is([data-template="bar"],[data-template="learn"],[data-template="farm"],[data-template="office"]) main { padding: 0; }
+  body:is([data-template="bar"],[data-template="learn"],[data-template="farm"],[data-template="office"]) .pad { padding: 34px 40px 80px; }
+  body:is([data-template="bar"],[data-template="learn"],[data-template="farm"],[data-template="office"]) .sideBig { display: none; }
+  body:is([data-template="bar"],[data-template="learn"],[data-template="farm"],[data-template="office"]) .sideName { font-size: 21px; font-weight: 700; margin-bottom: 26px; }
+  body:is([data-template="bar"],[data-template="learn"],[data-template="farm"],[data-template="office"]) .logo { border-color: var(--accent); }
+  /* Bar and nightlife: dark, neon and glowing */
+  body[data-template="bar"] h1.title, body[data-template="bar"] h2.sec { letter-spacing: 2px; font-weight: 400; }
+  body[data-template="bar"] .nav a { border-radius: 4px; letter-spacing: 1px; text-transform: uppercase; font-size: 14px; }
+  body[data-template="bar"] .nav a.active { background: var(--accent); color: #fff; box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 60%, transparent); }
+  body[data-template="bar"] .svHero.noimg { background: radial-gradient(circle at 20% 20%, #5b1fa8, #14082b 70%); }
+  body[data-template="bar"] .svHero h1.title { text-shadow: 0 0 18px color-mix(in srgb, var(--accent) 70%, transparent); font-size: clamp(40px, 7vw, 76px); }
+  body[data-template="bar"] .svBtn { border-radius: 4px; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 55%, transparent); }
+  body[data-template="bar"] .svInfo > div { border-left: none; border-top: 2px solid var(--accent); border-radius: 6px; }
+  body[data-template="bar"] .tile, body[data-template="bar"] .svStrip img { border-radius: 8px; border-bottom: 3px solid var(--accent); }
+  /* Classes and tutoring: bright, rounded and friendly */
+  body[data-template="learn"] h1.title, body[data-template="learn"] h2.sec { text-transform: none; font-weight: 700; letter-spacing: 0; }
+  body[data-template="learn"] .nav a { border-radius: 14px; }
+  body[data-template="learn"] .nav a.active { background: #fff; color: var(--primary); font-weight: 700; }
+  body[data-template="learn"] .svHero.noimg { background: linear-gradient(135deg, #1d5fd1, #19b3a6); }
+  body[data-template="learn"] .svBtn { border-radius: 14px; }
+  body[data-template="learn"] .svInfo > div { border-left: none; border-radius: 18px; border-top: 4px solid var(--accent); }
+  body[data-template="learn"] .tile, body[data-template="learn"] .svStrip img { border-radius: 18px; border-bottom: none; }
+  /* Farm and market: earthy, warm, a stall-sign feel */
+  body[data-template="farm"] h1.title, body[data-template="farm"] h2.sec { text-transform: none; font-weight: 700; letter-spacing: 0; }
+  body[data-template="farm"] .nav a { border-radius: 6px; }
+  body[data-template="farm"] .nav a.active { background: var(--accent); color: #fff; }
+  body[data-template="farm"] .svHero.noimg { background: linear-gradient(135deg, #2f5d34, #a9b94a); }
+  body[data-template="farm"] .svHero { border-bottom: 8px solid var(--accent); }
+  body[data-template="farm"] .svBtn { border-radius: 8px; }
+  body[data-template="farm"] .svInfo > div { border-left: none; border: 2px dashed var(--line); border-radius: 10px; }
+  body[data-template="farm"] .tile, body[data-template="farm"] .svStrip img { border-radius: 10px; border-bottom: none; }
+  /* Professional services: calm, formal, navy and gold */
+  body[data-template="office"] h1.title, body[data-template="office"] h2.sec { text-transform: none; font-weight: 700; letter-spacing: .3px; }
+  body[data-template="office"] .nav a { border-radius: 2px; border-left: 3px solid transparent; }
+  body[data-template="office"] .nav a.active { background: rgba(255,255,255,.12); border-left-color: var(--accent); }
+  body[data-template="office"] .svHero.noimg { background: linear-gradient(135deg, #14284b, #3a5688); }
+  body[data-template="office"] .svBtn { border-radius: 2px; letter-spacing: .5px; }
+  body[data-template="office"] .svInfo > div { border-left: none; border-top: 3px solid var(--accent); border-radius: 0; }
+  body[data-template="office"] .tile, body[data-template="office"] .svStrip img { border-radius: 2px; border-bottom: none; }
+  @media (max-width: 800px) { body:is([data-template="bar"],[data-template="learn"],[data-template="farm"],[data-template="office"]) .pad { padding: 22px 16px 60px; } }
+
+  /* "Hiring now" button, top right of every page */
+  .hireBar { position: sticky; top: 0; z-index: 30; height: 0; display: flex; justify-content: flex-end; padding-right: 16px; pointer-events: none; }
+  .hireBtn { pointer-events: auto; margin-top: 14px; display: inline-flex; align-items: center; gap: 6px; background: var(--primary); color: #fff; border: 2px solid var(--accent); border-radius: 999px; padding: 9px 16px; font-weight: 700; font-size: 14px; text-decoration: none; box-shadow: 0 4px 14px rgba(0,0,0,.3); }
+  .hireBtn:hover { filter: brightness(1.12); }
   .svHero { position: relative; min-height: 320px; display: flex; align-items: flex-end; background-size: cover; background-position: center; color: #fff; }
   .svHero::before { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.12) 0%, rgba(0,0,0,.72) 100%); }
   body[data-template="beauty"] .svHero.noimg { background: linear-gradient(135deg, #7a3b4b, #c9967a); }
@@ -291,14 +381,23 @@ const token = localStorage.getItem('ttp_token') || '';
 let biz = null, me = null, sortMode = 'relevant', query = '', pickRating = 0;
 
 const DAYS = ['sun','mon','tue','wed','thu','fri','sat'];
-const isSv = t => t === 'beauty' || t === 'build'; // the Beauty and Construction designs
+// Designs that use the hero + services layout, with their own page names and button text.
+const SV = {
+  beauty: { menu: 'Services', photos: 'Gallery', cta: 'Call to book', feat: 'Favourites', none: 'No services listed yet.' },
+  build: { menu: 'Services', photos: 'Projects', cta: 'Call for a quote', feat: 'Featured work', none: 'No services listed yet.' },
+  bar: { menu: 'Drinks & menu', photos: 'Gallery', cta: 'Call to reserve', feat: 'House favourites', none: 'No menu items listed yet.' },
+  learn: { menu: 'Classes', photos: 'Gallery', cta: 'Call to enrol', feat: 'Popular classes', none: 'No classes listed yet.' },
+  farm: { menu: "What's fresh", photos: 'Gallery', cta: 'Call to order', feat: 'In season', none: 'Nothing listed yet.' },
+  office: { menu: 'Services', photos: 'Our work', cta: 'Book a consultation', feat: 'Featured', none: 'No services listed yet.' }
+};
+const isSv = t => !!SV[t];
 function pages(){
   const t = biz && biz.template;
   const l = t === 'fabric' ? [['home','Home'],['photos','Photos'],['reviews','Reviews']]
-    : isSv(t) ? [['home','Home'],['menu','Services'],['photos', t === 'build' ? 'Projects' : 'Gallery'],['reviews','Reviews']]
+    : isSv(t) ? [['home','Home'],['menu',SV[t].menu],['photos',SV[t].photos],['reviews','Reviews']]
     : [['home','Home'],['menu','Menu'],['reviews','Reviews'],['photos','Photos']];
   if (biz && (biz.posts || []).length) l.push(['posts','Posts']);
-  if (biz && (biz.jobs || []).length) l.push(['jobs','Jobs']);
+  if (biz && ((biz.jobs || []).length || biz.hiring)) l.push(['jobs','Jobs']);
   return l;
 }
 
@@ -372,7 +471,8 @@ function render(){
   const m = $('main');
   const inner = p === 'home' ? homeHtml() : p === 'menu' ? menuHtml() : p === 'reviews' ? reviewsHtml() : p === 'posts' ? postsHtml() : p === 'jobs' ? jobsHtml() : photosHtml();
   document.documentElement.classList.toggle('fabric', biz.template === 'fabric');
-  m.innerHTML = (biz.template === 'fabric' && p === 'home') ? inner + reportRowHtml() : (isSv(biz.template) && p === 'home') ? inner : `<div class="pad">${inner}${p === 'home' ? reportRowHtml() : ''}</div>`;
+  const hire = biz.hiring ? '<div class="hireBar"><a class="hireBtn" href="#jobs">💼 Hiring now</a></div>' : '';
+  m.innerHTML = hire + ((biz.template === 'fabric' && p === 'home') ? inner + reportRowHtml() : (isSv(biz.template) && p === 'home') ? inner : `<div class="pad">${inner}${p === 'home' ? reportRowHtml() : ''}</div>`);
   window.scrollTo(0, 0);
   if (embed){
     m.querySelectorAll('a[href^="/"]').forEach(a => a.target = '_top');
@@ -416,7 +516,6 @@ function homeFabric(){
       </div>
       ${biz.description ? `<p class="desc" style="margin-top:20px">${esc(biz.description)}</p>` : ''}
       ${deals.map(d => `<div class="deal"><b>🔥 ${esc(d.title)}</b><br>${esc(d.description)}</div>`).join('')}
-      ${biz.hiring ? '<div class="chips"><span class="chip">💼 Hiring now</span></div>' : ''}
       <div class="chips">${['facebook','instagram','website'].filter(k => soc[k]).map(k => `<a class="chip" href="${esc(soc[k])}" target="_blank" rel="noopener">${k[0].toUpperCase() + k.slice(1)}</a>`).join('')}</div>
     </div>
     <div class="fPanel">
@@ -436,7 +535,7 @@ function homeService(){
   const now = new Date();
   const deals = (biz.deals || []).filter(d => !d.endDate || new Date(d.endDate) >= now);
   const soc = biz.social || {};
-  const call = biz.phone ? `<a class="svBtn" href="tel:${esc(biz.phone)}">📞 ${biz.template === 'build' ? 'Call for a quote' : 'Call to book'}</a>` : '';
+  const call = biz.phone ? `<a class="svBtn" href="tel:${esc(biz.phone)}">📞 ${SV[biz.template].cta}</a>` : '';
   const mail = biz.email ? `<a class="svBtn ghost" href="mailto:${esc(biz.email)}">✉ Email</a>` : '';
   return `<div class="svHero${hero ? '' : ' noimg'}"${hero ? ` style="background-image:url('${hero.replace(/'/g, '%27')}')"` : ''}>
       <div class="svHeroIn">
@@ -456,7 +555,6 @@ function homeService(){
       ${deals.map(d => `<div class="deal"><b>🔥 ${esc(d.title)}</b><br>${esc(d.description)}</div>`).join('')}
       ${strip.length ? `<div class="svStrip">${strip.map(u => `<img src="${u}" alt="" loading="lazy">`).join('')}</div>` : ''}
       ${aboutHtml()}
-      ${biz.hiring ? '<div class="chips"><span class="chip">💼 Hiring now</span></div>' : ''}
       <div class="chips">${['facebook','instagram','website'].filter(k => soc[k]).map(k => `<a class="chip" href="${esc(soc[k])}" target="_blank" rel="noopener">${k[0].toUpperCase() + k.slice(1)}</a>`).join('')}</div>
       ${reportRowHtml()}
     </div>`;
@@ -481,7 +579,6 @@ function homeHtml(){
     <p class="desc">${esc(biz.description) || '<span class="empty">No description yet.</span>'}</p>
     ${aboutHtml()}
     ${deals.map(d => `<div class="deal"><b>🔥 ${esc(d.title)}</b><br>${esc(d.description)}</div>`).join('')}
-    ${biz.hiring ? '<div class="chips"><span class="chip">💼 Hiring now</span></div>' : ''}
     <div class="chips">${['facebook','instagram','website'].filter(k => soc[k]).map(k => `<a class="chip" href="${esc(soc[k])}" target="_blank" rel="noopener">${k[0].toUpperCase() + k.slice(1)}</a>`).join('')}</div>
     <div class="contact">
       ${biz.email ? `<a class="pill" href="mailto:${esc(biz.email)}"><span class="ic">✉</span>${esc(biz.email)}</a>` : ''}
@@ -501,6 +598,7 @@ function postsHtml(){
       ${p.content ? `<p class="desc">${esc(p.content)}</p>` : ''}${p.imageUrl ? `<img src="${p.imageUrl}" alt="">` : ''}</div>`).join('');
 }
 function jobsHtml(){
+  if (!(biz.jobs || []).length) return `<h2 class="sec">Jobs</h2><hr class="rule" style="margin-top:0"><p class="desc">We are hiring! No openings are listed yet. Get in touch to ask about work with us.</p><div class="contact">${biz.email ? `<a class="pill" href="mailto:${esc(biz.email)}"><span class="ic">✉</span>${esc(biz.email)}</a>` : ''}${biz.phone ? `<a class="pill" href="tel:${esc(biz.phone)}"><span class="ic">📞</span>${esc(biz.phone)}</a>` : ''}</div>`;
   return `<h2 class="sec">Jobs</h2><hr class="rule" style="margin-top:0">` + (biz.jobs || []).map(j => `
     <div class="post"><b>💼 ${esc(j.title)}</b>${j.employmentType ? ' · ' + esc(j.employmentType) : ''}
       <div class="pd">${j.location ? esc(j.location) + ' · ' : ''}Posted ${new Date(j.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}${j.closingDate ? ' · Closes ' + new Date(j.closingDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</div>
@@ -518,10 +616,10 @@ function menuHtml(){
     s.items.push(i);
   });
   if (isSv(biz.template)){
-    return `<h2 class="sec">Services</h2><hr class="rule" style="margin-top:0">
-      ${sections.length ? `<div class="twoCol">${sections.map(s => `<section>${s.key !== 'Menu' ? `<h3 style="font-size:16px;margin:10px 0 4px;color:var(--title)">${esc(s.key)}</h3>` : ''}${s.items.map(i => `<div class="menuRow"><span>${esc(i.name)}</span><span>${esc(i.price)}</span></div>`).join('')}</section>`).join('')}</div>` : '<p class="empty">No services listed yet.</p>'}
+    return `<h2 class="sec">${SV[biz.template].menu}</h2><hr class="rule" style="margin-top:0">
+      ${sections.length ? `<div class="twoCol">${sections.map(s => `<section>${s.key !== 'Menu' ? `<h3 style="font-size:16px;margin:10px 0 4px;color:var(--title)">${esc(s.key)}</h3>` : ''}${s.items.map(i => `<div class="menuRow"><span>${esc(i.name)}</span><span>${esc(i.price)}</span></div>`).join('')}</section>`).join('')}</div>` : `<p class="empty">${SV[biz.template].none}</p>`}
       ${mp.length ? `<hr class="rule" style="margin:22px 0 14px"><h2 class="sec">Price list</h2>${tiles(mp, 'four')}` : ''}
-      ${hl.length ? `<hr class="rule" style="margin:22px 0 14px"><h2 class="sec">${biz.template === 'build' ? 'Featured work' : 'Favourites'}</h2><div class="grid four">${hl.map((u, i) => `<div><div class="tile"><img src="${u}" alt="" loading="lazy"></div><div class="cap">${esc(names[i] || '')}</div></div>`).join('')}</div>` : ''}`;
+      ${hl.length ? `<hr class="rule" style="margin:22px 0 14px"><h2 class="sec">${SV[biz.template].feat}</h2><div class="grid four">${hl.map((u, i) => `<div><div class="tile"><img src="${u}" alt="" loading="lazy"></div><div class="cap">${esc(names[i] || '')}</div></div>`).join('')}</div>` : ''}`;
   }
   return `
     <h2 class="sec">Menu</h2>
@@ -558,7 +656,7 @@ function photosHtml(){
   const rest = fab ? items.slice(feat.length) : items;
   const tileHtml = i => `<div><div class="tile"><img src="${i.url}" alt="" loading="lazy">${i.del ? `<button type="button" class="delPhoto" data-id="${i.id}" aria-label="Remove photo">✕</button>` : ''}</div>${i.by ? `<div class="cap" style="font-size:12px;color:var(--muted)">${esc(i.by)}</div>` : ''}${i.id && !i.del ? reportBtn('photo', i.id, i.uid) : ''}</div>`;
   return `
-    <h2 class="sec">${biz.template === 'build' ? 'Projects' : biz.template === 'beauty' ? 'Gallery' : 'Photos'}</h2><hr class="rule" style="margin-top:0">
+    <h2 class="sec">${SV[biz.template] ? SV[biz.template].photos : 'Photos'}</h2><hr class="rule" style="margin-top:0">
     ${feat.length ? `<div class="grid">${feat.map(tileHtml).join('')}</div><hr class="rule" style="margin:22px 0 14px">` : ''}
     <div class="tools" style="margin-bottom:6px">${chip('all', 'All')}${chip('owner', 'Business')}${chip('customers', 'Customers')}${add}</div>
     <div class="msg" id="pmsg" role="status"></div>
@@ -744,7 +842,7 @@ function applyBrand(hex){
   const vivid = c(Math.max(s0, 55), dk ? 62 : 46);
   if (t === 'build'){
     set('--accent', hex); set('--line', hex); set('--onAccent', hexLum(hex) > .4 ? '#111' : '#fff');
-  } else if (t === 'beauty'){
+  } else if (t === 'beauty' || t === 'bar' || t === 'learn' || t === 'farm' || t === 'office'){
     set('--primary', c(s, dk ? 16 : 32)); set('--title', c(s, dk ? 82 : 32)); set('--primary-soft', c(s, dk ? 28 : 42));
     set('--accent', vivid); set('--line', c(s, dk ? 38 : 84));
   } else if (t === 'fabric'){

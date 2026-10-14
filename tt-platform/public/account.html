@@ -379,6 +379,47 @@
       <div id="staffPostsList"><p style="color:#999;font-size:13px;">Loading...</p></div>
     </div>
 
+
+    <div class="card" id="staffJobsCard" style="display:none;">
+      <h2>Jobs</h2>
+      <label>Job title</label><input type="text" id="staffJobTitle" maxlength="100">
+      <label>Type (e.g. Full-time)</label><input type="text" id="staffJobType" maxlength="40">
+      <label>Location</label><input type="text" id="staffJobLocation" maxlength="150">
+      <label>Salary (optional)</label><input type="text" id="staffJobSalary" maxlength="100">
+      <label>Description</label><textarea id="staffJobDescription"></textarea>
+      <label>Requirements</label><textarea id="staffJobRequirements"></textarea>
+      <label>Closes (optional)</label><input type="date" id="staffJobClosing">
+      <button id="staffJobBtn" style="margin-top:10px;">Post Job</button>
+      <div class="msg" id="staffJobMsg"></div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:20px 0;">
+      <h3 style="font-size:15px;margin-bottom:10px;">Current Jobs</h3>
+      <div id="staffJobsList"></div>
+    </div>
+
+    <div class="card" id="staffReviewsCard" style="display:none;">
+      <h2>Reviews</h2>
+      <div id="staffReviewsList"></div>
+    </div>
+
+    <div class="card" id="staffPhotosCard" style="display:none;">
+      <h2>Photos</h2>
+      <p style="font-size:13px;color:var(--text-muted2);margin-bottom:10px;">Photos shown in your business gallery.</p>
+      <div id="staffPhotoGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;"></div>
+      <input type="file" id="staffPhotoFile" accept="image/*" style="display:none;">
+      <button id="staffPhotoBtn" style="margin-top:12px;">Add a photo</button>
+      <div class="msg" id="staffPhotoMsg"></div>
+    </div>
+
+    <div class="card" id="staffInfoCard" style="display:none;">
+      <h2>Hours &amp; contact</h2>
+      <label>Phone</label><input type="text" id="staffInfoPhone" maxlength="40">
+      <label>Email</label><input type="text" id="staffInfoEmail" maxlength="150">
+      <label>Opening hours</label>
+      <div id="staffHoursBox"></div>
+      <button id="staffInfoBtn" style="margin-top:12px;">Save</button>
+      <div class="msg" id="staffInfoMsg"></div>
+    </div>
+
     <div class="card" id="staffDealsCard" style="display:none;">
       <h2>Deals</h2>
       <label>Deal Title</label>
@@ -588,6 +629,18 @@
         <label style="display:flex;align-items:center;gap:8px;margin-top:8px;text-transform:none;">
           <input type="checkbox" id="newStaffDeals" style="width:auto;"> Can manage Deals
         </label>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:8px;text-transform:none;">
+          <input type="checkbox" id="newStaffJobs" style="width:auto;"> Can manage Job listings
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:8px;text-transform:none;">
+          <input type="checkbox" id="newStaffPhotos" style="width:auto;"> Can upload and remove Photos
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:8px;text-transform:none;">
+          <input type="checkbox" id="newStaffInfo" style="width:auto;"> Can edit Hours and contact info
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:8px;text-transform:none;">
+          <input type="checkbox" id="newStaffReviews" style="width:auto;"> Can reply to Reviews
+        </label>
         <button id="addStaffBtn" style="margin-top:14px;">Add Staff Member</button>
         <div class="msg" id="staffMsg"></div>
         <hr style="border:none;border-top:1px solid var(--border);margin:20px 0;">
@@ -680,7 +733,7 @@ document.getElementById('studioTopAvatar').addEventListener('click', () => {
 });
 
 // ---------------- Business Designs picker + "View it" preview ----------------
-const DESIGNS = [{ id: 'food', name: 'Food', blurb: 'Blue sidebar with Menu, Highlights, Reviews and Photos pages. Great for restaurants, bakeries and food trucks.', swatch: '#23659b' }, { id: 'fabric', name: 'Clothing and fabric', blurb: 'Warm brown and cream with a big bold name, a photo collage and a gallery. Great for boutiques, tailors and fabric shops.', swatch: '#2a1810' }, { id: 'beauty', name: 'Beauty', blurb: 'Soft rose and cream with an elegant name, a big hero photo and a Services price list. Great for salons, barbers, nail techs, spas and makeup artists.', swatch: '#7a3b4b' }, { id: 'build', name: 'Construction', blurb: 'Bold charcoal and safety yellow with a hero banner, a Services list, a Projects gallery and a one-tap Call button. Great for builders, plumbers, electricians and contractors.', swatch: '#f5b000' }];
+const DESIGNS = [{ id: 'food', name: 'Food', blurb: 'Blue sidebar with Menu, Highlights, Reviews and Photos pages. Great for restaurants, bakeries and food trucks.', swatch: '#23659b' }, { id: 'fabric', name: 'Clothing and fabric', blurb: 'Warm brown and cream with a big bold name, a photo collage and a gallery. Great for boutiques, tailors and fabric shops.', swatch: '#2a1810' }, { id: 'beauty', name: 'Beauty', blurb: 'Soft rose and cream with an elegant name, a big hero photo and a Services price list. Great for salons, barbers, nail techs, spas and makeup artists.', swatch: '#7a3b4b' }, { id: 'build', name: 'Construction', blurb: 'Bold charcoal and safety yellow with a hero banner, a Services list, a Projects gallery and a one-tap Call button. Great for builders, plumbers, electricians and contractors.', swatch: '#f5b000' }, { id: 'bar', name: 'Bar and nightlife', premium: true, blurb: 'Dark with neon glow, a bold drinks menu and a Reserve button. Great for bars, lounges, clubs and late-night food.', swatch: '#d81b86' }, { id: 'learn', name: 'Classes and tutoring', premium: true, blurb: 'Bright and friendly with a Classes list and an Enrol button. Great for tutors, music and dance lessons and training centres.', swatch: '#1d5fd1' }, { id: 'farm', name: 'Farm and market', premium: true, blurb: "Earthy greens and warm tones with a What's fresh list. Great for farms, markets, produce sellers and bakers.", swatch: '#2f5d34' }, { id: 'office', name: 'Professional services', premium: true, blurb: 'Calm navy and gold with a Services list and a Book a consultation button. Great for lawyers, clinics, accountants and offices.', swatch: '#14284b' }];
 let chosenDesign = 'food';
 const brandPicker = ttBrandPicker({
   mount: document.getElementById('brandMount'),
@@ -688,12 +741,17 @@ const brandPicker = ttBrandPicker({
   getSwatch: () => (DESIGNS.find(d => d.id === chosenDesign) || DESIGNS[0]).swatch
 });
 function paintDesignCards(){
+  const isPrem = window.ttMyPlan === 'premium';
   document.getElementById('designCards').innerHTML = DESIGNS.map(d => `
     <button type="button" class="designCard" data-id="${d.id}" aria-pressed="${d.id === chosenDesign}" style="display:flex;gap:12px;align-items:center;width:100%;text-align:left;margin:0 0 8px;padding:12px;border-radius:10px;background:var(--card-bg);color:var(--text);border:2px solid ${d.id === chosenDesign ? '#e0562f' : 'var(--input-border)'};">
       <span style="width:44px;height:44px;border-radius:8px;background:${d.swatch};flex-shrink:0;"></span>
-      <span><b>${d.name}</b>${d.id === chosenDesign ? ' ✓' : ''}<br><span style="font-size:12px;color:var(--text-muted);font-weight:400;">${d.blurb}</span></span>
+      <span><b>${d.name}</b>${d.id === chosenDesign ? ' ✓' : ''}${d.premium ? ` <span style="font-size:11px;font-weight:700;background:#e0562f;color:#fff;border-radius:10px;padding:2px 8px;margin-left:4px;">${isPrem || d.id === chosenDesign ? '⭐ Premium' : '🔒 Premium'}</span>` : ''}<br><span style="font-size:12px;color:var(--text-muted);font-weight:400;">${d.blurb}</span></span>
     </button>`).join('');
-  document.querySelectorAll('.designCard').forEach(b => b.addEventListener('click', () => { chosenDesign = b.dataset.id; paintDesignCards(); brandPicker.designChanged(); }));
+  document.querySelectorAll('.designCard').forEach(b => b.addEventListener('click', () => {
+    const d = DESIGNS.find(x => x.id === b.dataset.id);
+    if (d.premium && window.ttMyPlan !== 'premium' && d.id !== chosenDesign){ window.ttOpenPremium(); return; }
+    chosenDesign = b.dataset.id; paintDesignCards(); brandPicker.designChanged();
+  }));
 }
 paintDesignCards();
 function currentDraft(){
@@ -1308,6 +1366,147 @@ document.getElementById('staffLogoutBtn').addEventListener('click', async () => 
   showView('auth');
 });
 
+
+// ---------------- More things staff can do (jobs, review replies, photos, hours and contact) ----------------
+const staffHdr = () => ({ 'Content-Type': 'application/json', 'x-staff-token': staffToken });
+async function staffGetBiz(){
+  const res = await fetch('/api/businesses/' + staffBiz.businessId, { headers: { 'x-staff-token': staffToken } });
+  return res.json();
+}
+const niceDate = d => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+async function loadStaffJobs(){
+  const box = document.getElementById('staffJobsList');
+  const biz = await staffGetBiz();
+  const jobs = biz.jobs || [];
+  box.innerHTML = jobs.length ? '' : '<p style="color:#999;font-size:13px;">No jobs yet.</p>';
+  jobs.forEach(j => {
+    const row = document.createElement('div'); row.className = 'dealListItem';
+    row.innerHTML = '<div><b>' + escapeHtml(j.title) + '</b><div style="font-size:13px;color:var(--text-muted2);">' + escapeHtml([j.employmentType, j.location].filter(Boolean).join(' · ')) + '</div><div class="postDate">' + niceDate(j.createdAt) + '</div></div>';
+    const del = document.createElement('button'); del.type = 'button'; del.className = 'dealDelBtn'; del.textContent = 'Delete';
+    del.addEventListener('click', async () => {
+      await fetch('/api/my/businesses/' + staffBiz.businessId + '/jobs/' + j._id, { method: 'DELETE', headers: { 'x-staff-token': staffToken } });
+      loadStaffJobs();
+    });
+    row.appendChild(del); box.appendChild(row);
+  });
+}
+document.getElementById('staffJobBtn').addEventListener('click', async () => {
+  const msg = document.getElementById('staffJobMsg'), g = id => document.getElementById(id).value.trim();
+  if (!g('staffJobTitle')){ msg.textContent = 'A job title is required.'; return; }
+  const res = await fetch('/api/my/businesses/' + staffBiz.businessId + '/jobs', { method: 'POST', headers: staffHdr(), body: JSON.stringify({
+    title: g('staffJobTitle'), employmentType: g('staffJobType'), location: g('staffJobLocation'), salary: g('staffJobSalary'),
+    description: g('staffJobDescription'), requirements: g('staffJobRequirements'), closingDate: g('staffJobClosing') }) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok){ msg.textContent = data.error || 'Could not post the job.'; return; }
+  ['Title', 'Type', 'Location', 'Salary', 'Description', 'Requirements', 'Closing'].forEach(k => document.getElementById('staffJob' + k).value = '');
+  msg.textContent = 'Posted!';
+  loadStaffJobs();
+});
+
+async function loadStaffReviews(){
+  const box = document.getElementById('staffReviewsList');
+  const biz = await staffGetBiz();
+  const reviews = biz.reviews || [];
+  box.innerHTML = reviews.length ? '' : '<p style="color:#999;font-size:13px;">No reviews yet.</p>';
+  reviews.forEach(r => {
+    const d = document.createElement('div'); d.className = 'dealListItem'; d.style.display = 'block';
+    d.innerHTML = '<div><b>' + escapeHtml(r.authorName || 'Anonymous') + '</b> · ' + '★'.repeat(r.rating) + '<span style="color:#ccc">' + '★'.repeat(5 - r.rating) + '</span><div style="font-size:13px;margin-top:4px;">' + escapeHtml(r.comment) + '</div><div class="postDate">' + niceDate(r.createdAt) + '</div></div>';
+    if (r.reply){
+      const rp = document.createElement('div'); rp.style.cssText = 'margin-top:8px;padding:8px 10px;border-radius:8px;background:var(--soft-bg);font-size:13px;';
+      rp.textContent = 'Your reply: ' + r.reply.text; d.appendChild(rp);
+    } else {
+      const ta = document.createElement('textarea'); ta.placeholder = 'Write a reply...'; ta.maxLength = 600; ta.style.marginTop = '8px';
+      const btn = document.createElement('button'); btn.type = 'button'; btn.textContent = 'Reply'; btn.style.marginTop = '6px';
+      const m = document.createElement('div'); m.className = 'msg';
+      btn.addEventListener('click', async () => {
+        if (!ta.value.trim()){ m.textContent = 'Write a reply first.'; return; }
+        const res = await fetch('/api/my/businesses/' + staffBiz.businessId + '/reviews/' + r._id + '/reply', { method: 'POST', headers: staffHdr(), body: JSON.stringify({ text: ta.value }) });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok){ m.textContent = data.error || 'Could not save the reply.'; return; }
+        loadStaffReviews();
+      });
+      d.appendChild(ta); d.appendChild(btn); d.appendChild(m);
+    }
+    box.appendChild(d);
+  });
+}
+
+let staffPhotos = [];
+function paintStaffPhotos(){
+  const grid = document.getElementById('staffPhotoGrid');
+  grid.innerHTML = staffPhotos.length ? '' : '<p style="color:#999;font-size:13px;grid-column:1/-1;">No photos yet.</p>';
+  staffPhotos.forEach((u, i) => {
+    const w = document.createElement('div'); w.style.cssText = 'position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;';
+    const im = document.createElement('img'); im.src = u; im.alt = ''; im.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+    const x = document.createElement('button'); x.type = 'button'; x.textContent = '✕'; x.setAttribute('aria-label', 'Remove photo');
+    x.style.cssText = 'position:absolute;top:4px;right:4px;width:26px;height:26px;border-radius:50%;border:none;background:rgba(0,0,0,.65);color:#fff;cursor:pointer;padding:0;margin:0;';
+    x.addEventListener('click', async () => {
+      if (!(await ttConfirm('Remove this photo?', { ok: 'Remove', danger: true }))) return;
+      staffPhotos.splice(i, 1); await saveStaffPhotos();
+    });
+    w.appendChild(im); w.appendChild(x); grid.appendChild(w);
+  });
+}
+async function saveStaffPhotos(){
+  const msg = document.getElementById('staffPhotoMsg');
+  const res = await fetch('/api/my/businesses/' + staffBiz.businessId + '/photos', { method: 'PUT', headers: staffHdr(), body: JSON.stringify({ photos: staffPhotos }) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok){ msg.textContent = data.error || 'Could not save photos.'; await loadStaffPhotos(); return; }
+  msg.textContent = '';
+  staffPhotos = data.photos || staffPhotos; paintStaffPhotos();
+}
+async function loadStaffPhotos(){ const biz = await staffGetBiz(); staffPhotos = [...(biz.photos || [])]; paintStaffPhotos(); }
+document.getElementById('staffPhotoBtn').addEventListener('click', () => document.getElementById('staffPhotoFile').click());
+document.getElementById('staffPhotoFile').addEventListener('change', e => {
+  const file = e.target.files[0]; e.target.value = '';
+  if (!file) return;
+  if (!file.type.startsWith('image/')){ ttAlert('Please choose an image file.'); return; }
+  const reader = new FileReader();
+  reader.onload = evt => {
+    const img = new Image();
+    img.onload = async () => {
+      const max = 900; let w = img.width, h = img.height;
+      if (w > max || h > max){ if (w > h){ h = Math.round(h * max / w); w = max; } else { w = Math.round(w * max / h); h = max; } }
+      const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(img, 0, 0, w, h);
+      staffPhotos.push(c.toDataURL('image/jpeg', 0.75));
+      await saveStaffPhotos();
+    };
+    img.src = evt.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+const STAFF_DAYS = [['mon', 'Mon'], ['tue', 'Tue'], ['wed', 'Wed'], ['thu', 'Thu'], ['fri', 'Fri'], ['sat', 'Sat'], ['sun', 'Sun']];
+async function loadStaffInfo(){
+  const biz = await staffGetBiz();
+  document.getElementById('staffInfoPhone').value = biz.phone || '';
+  document.getElementById('staffInfoEmail').value = biz.email || '';
+  const box = document.getElementById('staffHoursBox'); box.innerHTML = '';
+  const h = (biz.hours && typeof biz.hours === 'object') ? biz.hours : {};
+  if (typeof biz.hours === 'string' && biz.hours){
+    const n = document.createElement('p'); n.style.cssText = 'font-size:12px;color:var(--text-muted2);margin-bottom:6px;';
+    n.textContent = 'Current hours: ' + biz.hours + ' (saving will replace this with the times below)'; box.appendChild(n);
+  }
+  STAFF_DAYS.forEach(([k, label]) => {
+    const d = h[k] || { open: '09:00', close: '17:00', closed: false };
+    const row = document.createElement('div'); row.style.cssText = 'display:grid;grid-template-columns:44px 1fr 1fr auto;gap:8px;align-items:center;margin-bottom:6px;'; row.dataset.day = k;
+    row.innerHTML = '<span style="font-size:13px;">' + label + '</span><input type="time" class="hOpen" value="' + (d.open || '09:00') + '"><input type="time" class="hClose" value="' + (d.close || '17:00') + '"><label style="font-size:12px;display:flex;gap:4px;align-items:center;text-transform:none;margin:0;"><input type="checkbox" class="hClosed" style="width:auto;"' + (d.closed ? ' checked' : '') + '> Closed</label>';
+    box.appendChild(row);
+  });
+}
+document.getElementById('staffInfoBtn').addEventListener('click', async () => {
+  const msg = document.getElementById('staffInfoMsg');
+  const hours = {};
+  document.querySelectorAll('#staffHoursBox [data-day]').forEach(r => {
+    hours[r.dataset.day] = { open: r.querySelector('.hOpen').value || '09:00', close: r.querySelector('.hClose').value || '17:00', closed: r.querySelector('.hClosed').checked };
+  });
+  const res = await fetch('/api/my/businesses/' + staffBiz.businessId + '/info', { method: 'PUT', headers: staffHdr(), body: JSON.stringify({
+    phone: document.getElementById('staffInfoPhone').value, email: document.getElementById('staffInfoEmail').value, hours }) });
+  const data = await res.json().catch(() => ({}));
+  msg.textContent = res.ok ? 'Saved!' : (data.error || 'Could not save.');
+});
+
 async function enterStaffApp(){
   const res = await fetch('/api/staff/me', { headers: { 'x-staff-token': staffToken } });
   if (!res.ok){
@@ -1321,7 +1520,14 @@ async function enterStaffApp(){
   document.getElementById('staffEmail').textContent = staffBiz.email;
   document.getElementById('staffPostsCard').style.display = staffBiz.permissions.posts ? 'block' : 'none';
   document.getElementById('staffDealsCard').style.display = staffBiz.permissions.deals ? 'block' : 'none';
+  [['jobs', 'staffJobsCard'], ['reviews', 'staffReviewsCard'], ['photos', 'staffPhotosCard'], ['info', 'staffInfoCard']].forEach(([k, id]) => {
+    document.getElementById(id).style.display = staffBiz.permissions[k] ? 'block' : 'none';
+  });
   showView('staff');
+  if (staffBiz.permissions.jobs) loadStaffJobs();
+  if (staffBiz.permissions.reviews) loadStaffReviews();
+  if (staffBiz.permissions.photos) loadStaffPhotos();
+  if (staffBiz.permissions.info) loadStaffInfo();
   if (staffBiz.permissions.posts) loadStaffPosts();
   if (staffBiz.permissions.deals) loadStaffDeals();
 }
@@ -1462,6 +1668,7 @@ async function loadStaffList(){
     const perms = [];
     if (s.permissions && s.permissions.posts) perms.push('<span class="staffPermBadge">Posts</span>');
     if (s.permissions && s.permissions.deals) perms.push('<span class="staffPermBadge">Deals</span>');
+    [['jobs', 'Jobs'], ['photos', 'Photos'], ['info', 'Hours & contact'], ['reviews', 'Reviews']].forEach(([k, l]) => { if (s.permissions && s.permissions[k]) perms.push('<span class="staffPermBadge">' + l + '</span>'); });
     row.innerHTML = `<div>
       <b>${escapeHtml(s.email)}</b>
       <div style="margin-top:4px;">${perms.join('') || '<span class="staffPermBadge">No permissions</span>'}</div>
@@ -1494,7 +1701,11 @@ document.getElementById('addStaffBtn').addEventListener('click', async () => {
       email,
       password,
       posts: document.getElementById('newStaffPosts').checked,
-      deals: document.getElementById('newStaffDeals').checked
+      deals: document.getElementById('newStaffDeals').checked,
+      jobs: document.getElementById('newStaffJobs').checked,
+      photos: document.getElementById('newStaffPhotos').checked,
+      info: document.getElementById('newStaffInfo').checked,
+      reviews: document.getElementById('newStaffReviews').checked
     })
   });
   const data = await res.json();
@@ -1504,6 +1715,7 @@ document.getElementById('addStaffBtn').addEventListener('click', async () => {
     document.getElementById('newStaffPassword').value = '';
     document.getElementById('newStaffPosts').checked = false;
     document.getElementById('newStaffDeals').checked = false;
+    ['Jobs', 'Photos', 'Info', 'Reviews'].forEach(k => document.getElementById('newStaff' + k).checked = false);
     loadStaffList();
   } else {
     msg.textContent = data.error || 'Could not add staff member.';
@@ -2351,7 +2563,7 @@ async function enterApp(){
   const res = await fetch('/api/me', { headers: { 'x-auth-token': token } });
   if (!res.ok){ showView('auth'); return; }
   const data = await res.json();
-  myPlan = data.plan;
+  myPlan = data.plan; window.ttMyPlan = data.plan;
   myEmail = data.email;
   myUserId = data.id;
   showVerifyBanner(data);
