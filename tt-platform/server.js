@@ -913,7 +913,7 @@ app.post('/api/my/businesses', requireUser, requireVerified, requireBusinessAcco
       email: String(b.email || '').slice(0, 150),
       hours: sanitizeHours(b.hours),
       imageUrl: String(b.imageUrl || '').slice(0, 400000),
-      coverUrl: String(b.coverUrl || '').slice(0, 400000),
+      logoUrl: String(b.logoUrl || '').slice(0, 400000),
       tagline: String(b.tagline || '').trim().slice(0, 60),
       photos: sanitizePhotoArray(b.photos),
       menuPhotos: sanitizePhotoArray(b.menuPhotos),
@@ -985,7 +985,6 @@ app.put('/api/my/businesses/:id', requireUser, requireBusinessAccount, async (re
     if (typeof b.email === 'string') update.email = b.email.slice(0, 150);
     if (b.hours) update.hours = sanitizeHours(b.hours);
     if (typeof b.imageUrl === 'string') update.imageUrl = b.imageUrl.slice(0, 400000);
-    if (typeof b.coverUrl === 'string') update.coverUrl = b.coverUrl.slice(0, 400000);
     if (Array.isArray(b.photos)) update.photos = sanitizePhotoArray(b.photos);
     if (Array.isArray(b.menuPhotos)) update.menuPhotos = sanitizePhotoArray(b.menuPhotos);
     if (Array.isArray(b.highlights)) update.highlights = sanitizePhotoArray(b.highlights);

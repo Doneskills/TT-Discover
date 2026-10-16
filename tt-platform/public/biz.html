@@ -381,8 +381,7 @@ const token = localStorage.getItem('ttp_token') || '';
 let biz = null, me = null, sortMode = 'relevant', query = '', pickRating = 0;
 
 const DAYS = ['sun','mon','tue','wed','thu','fri','sat'];
-// The photo used on the business page. The "main photo" (imageUrl) is only for the home page card; older pages without a business photo keep using it.
-const pageCover = () => biz.coverUrl || biz.imageUrl || '';
+// Business pages show the owner's gallery photos. The business photo (imageUrl) is only for the home page card.
 // Designs that use the hero + services layout, with their own page names and button text.
 const SV = {
   beauty: { menu: 'Services', photos: 'Gallery', cta: 'Call to book', feat: 'Favourites', none: 'No services listed yet.' },
@@ -501,7 +500,7 @@ function tiles(urls, cls){ return urls.length ? `<div class="grid ${cls || ''}">
 
 function homeFabric(){
   const r = ratingOf(biz), st = openStatus(biz.hours);
-  const pics = [pageCover(), ...(biz.photos || [])].filter(Boolean).slice(0, 3);
+  const pics = (biz.photos || []).filter(Boolean).slice(0, 3);
   const now = new Date();
   const deals = (biz.deals || []).filter(d => !d.endDate || new Date(d.endDate) >= now);
   const soc = biz.social || {};
@@ -532,8 +531,8 @@ function homeFabric(){
 }
 function homeService(){
   const r = ratingOf(biz), st = openStatus(biz.hours);
-  const pics = [pageCover(), ...(biz.photos || [])].filter(Boolean);
-  const hero = pageCover() || pics[0] || '';
+  const pics = (biz.photos || []).filter(Boolean);
+  const hero = pics[0] || '';
   const strip = pics.slice(hero === pics[0] ? 1 : 0, 5);
   const now = new Date();
   const deals = (biz.deals || []).filter(d => !d.endDate || new Date(d.endDate) >= now);
@@ -565,7 +564,7 @@ function homeHtml(){
   if (biz.template === 'fabric') return homeFabric();
   if (isSv(biz.template)) return homeService();
   const r = ratingOf(biz), st = openStatus(biz.hours);
-  const pics = [pageCover(), ...(biz.photos || [])].filter(Boolean).slice(0, 6);
+  const pics = (biz.photos || []).filter(Boolean).slice(0, 6);
   const now = new Date();
   const deals = (biz.deals || []).filter(d => !d.endDate || new Date(d.endDate) >= now);
   const soc = biz.social || {};
@@ -648,7 +647,7 @@ function shrink(file){
   });
 }
 let custPhotos = [], custLoaded = false, photoFilter = 'all';
-function ownerPhotoList(){ return [pageCover(), ...(biz.photos || []), ...(biz.menuPhotos || []), ...(biz.highlights || [])].filter(Boolean); }
+function ownerPhotoList(){ return [ ...(biz.photos || []), ...(biz.menuPhotos || []), ...(biz.highlights || [])].filter(Boolean); }
 function photosHtml(){
   const owner = ownerPhotoList().map(u => ({ url: u, by: '' }));
   const cust = custPhotos.map(c => ({ url: c.url, by: c.username ? '@' + c.username : 'Customer', uid: c.userId, id: c._id, del: !!(me && (c.userId === me.id || isOwner())) }));

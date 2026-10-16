@@ -89,6 +89,12 @@ function renderPremiumPlan(key){
     else if (emptySpan) emptySpan.appendChild(b);
     else { b.classList.add('floating'); document.body.appendChild(b); }
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mountButton);
-  else mountButton();
+  function showPending() {
+    try {
+      if (localStorage.getItem('ttp_premium_pending')) { localStorage.removeItem('ttp_premium_pending'); setTimeout(open, 900); }
+    } catch (e) {}
+  }
+  function init() { mountButton(); showPending(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
 })();

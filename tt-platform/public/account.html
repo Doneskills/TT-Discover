@@ -502,7 +502,16 @@
           <div class="studioField" data-group="logomenu" data-field="overview">
             <label>Description</label>
             <textarea id="bDescription" placeholder="Tell customers about your business"></textarea>
-            <label>Photos (optional)</label>
+            <label>Logo (optional)</label>
+            <div id="logoUploadBtn" class="menuUploadBtn">🏷️ Click to add your logo</div>
+            <input type="file" id="logoFileInput" accept="image/*" style="display:none;">
+            <div id="logoPreview"></div>
+            <label>Business photo</label>
+            <div style="font-size:12px;color:var(--text-muted);margin:-2px 0 6px;">Shows on the home page, the outside of your business.</div>
+            <div id="coverUploadBtn" class="menuUploadBtn">🏪 Click to add your business photo</div>
+            <input type="file" id="coverFileInput" accept="image/*" style="display:none;">
+            <div id="coverPreview"></div>
+            <label>Photos of the business (optional)</label>
             <div id="photoUploadBtn" class="menuUploadBtn">📷 Click to add photo(s)</div>
             <input type="file" id="photoFileInput" accept="image/*" multiple style="display:none;">
             <div id="photoPreviewGrid"></div>
@@ -739,7 +748,6 @@ document.getElementById('studioTopAvatar').addEventListener('click', () => {
 
 // ---------------- Business Designs picker + "View it" preview ----------------
 const DESIGNS = [{ id: 'food', name: 'Food', blurb: 'Blue sidebar with Menu, Highlights, Reviews and Photos pages. Great for restaurants, bakeries and food trucks.', swatch: '#23659b' }, { id: 'fabric', name: 'Clothing and fabric', blurb: 'Warm brown and cream with a big bold name, a photo collage and a gallery. Great for boutiques, tailors and fabric shops.', swatch: '#2a1810' }, { id: 'beauty', name: 'Beauty', blurb: 'Soft rose and cream with an elegant name, a big hero photo and a Services price list. Great for salons, barbers, nail techs, spas and makeup artists.', swatch: '#7a3b4b' }, { id: 'build', name: 'Construction', blurb: 'Bold charcoal and safety yellow with a hero banner, a Services list, a Projects gallery and a one-tap Call button. Great for builders, plumbers, electricians and contractors.', swatch: '#f5b000' }, { id: 'bar', name: 'Bar and nightlife', premium: true, blurb: 'Dark with neon glow, a bold drinks menu and a Reserve button. Great for bars, lounges, clubs and late-night food.', swatch: '#d81b86' }, { id: 'learn', name: 'Classes and tutoring', premium: true, blurb: 'Bright and friendly with a Classes list and an Enrol button. Great for tutors, music and dance lessons and training centres.', swatch: '#1d5fd1' }, { id: 'farm', name: 'Farm and market', premium: true, blurb: "Earthy greens and warm tones with a What's fresh list. Great for farms, markets, produce sellers and bakers.", swatch: '#2f5d34' }, { id: 'office', name: 'Professional services', premium: true, blurb: 'Calm navy and gold with a Services list and a Book a consultation button. Great for lawyers, clinics, accountants and offices.', swatch: '#14284b' }];
-let currentBizImage = '';
 let chosenDesign = 'food';
 const brandPicker = ttBrandPicker({
   mount: document.getElementById('brandMount'),
@@ -765,7 +773,7 @@ function currentDraft(){
   return {
     name: v('bName'), tagline: v('bTagline'), category: v('bCategory'), description: v('bDescription'), address: v('bAddress'), area: v('bArea'),
     phone: v('bPhone'), email: v('bEmail'), hours: hoursState,
-    imageUrl: photosState[0] || v('bImageUrl'), photos: photosState, menuPhotos: menuPhotosState, highlights: highlightsState,
+    imageUrl: coverState || photosState[0] || v('bImageUrl'), logoUrl: logoState, photos: photosState, menuPhotos: menuPhotosState, highlights: highlightsState,
     social: { facebook: v('bSocialFacebook'), instagram: v('bSocialInstagram'), website: v('bSocialWebsite') },
     template: chosenDesign, brandColor: brandPicker.get(), reviews: [], deals: []
   };
@@ -855,7 +863,41 @@ function renderPhotoPreviews(){
   });
 }
 
+
+// ---------------- Logo and business photo (one picture each) ----------------
+let logoState = '', coverState = '';
+function shrinkImage(file, maxDim, cb){
+  if (!file || !file.type.startsWith('image/')){ ttAlert('Please choose an image file.'); return; }
+  const reader = new FileReader();
+  reader.onload = evt => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      if (w > maxDim || h > maxDim){ if (w > h){ h = Math.round(h * maxDim / w); w = maxDim; } else { w = Math.round(w * maxDim / h); h = maxDim; } }
+      const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(img, 0, 0, w, h);
+      cb(c.toDataURL('image/jpeg', 0.8));
+    };
+    img.src = evt.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function paintSingle(previewId, url, onRemove){
+  const box = document.getElementById(previewId); box.innerHTML = '';
+  if (!url) return;
+  const wrap = document.createElement('div'); wrap.className = 'menuPhotoPreview'; wrap.style.cssText = 'display:inline-block;position:relative;width:auto;';
+  wrap.innerHTML = `<img src="${url}" alt=""><div class="removeBtn">✕</div>`;
+  wrap.querySelector('.removeBtn').addEventListener('click', onRemove);
+  box.appendChild(wrap);
+}
+function setLogo(url){ logoState = url || ''; paintSingle('logoPreview', logoState, () => setLogo('')); }
+function setCover(url){ coverState = url || ''; paintSingle('coverPreview', coverState, () => setCover('')); }
+document.getElementById('logoUploadBtn').addEventListener('click', () => document.getElementById('logoFileInput').click());
+document.getElementById('coverUploadBtn').addEventListener('click', () => document.getElementById('coverFileInput').click());
+document.getElementById('logoFileInput').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; shrinkImage(f, 500, setLogo); });
+document.getElementById('coverFileInput').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; shrinkImage(f, 800, setCover); });
+
 function resetImagePicker(){
+  setLogo(''); setCover('');
   photosState = [];
   renderPhotoPreviews();
   imageUrlInput.value = '';
@@ -1880,7 +1922,6 @@ function populateStudioForm(biz){
   brandPicker.set(biz.brandColor || ''); brandPicker.designChanged();
   document.getElementById('bName').value = biz.name || '';
   document.getElementById('bTagline').value = biz.tagline || '';
-  currentBizImage = biz.imageUrl || '';
   document.getElementById('bCategory').value = biz.category || '';
   document.getElementById('bDescription').value = biz.description || '';
   document.getElementById('bAddress').value = biz.address || '';
@@ -1905,6 +1946,7 @@ function populateStudioForm(biz){
   document.getElementById('bSocialWebsite').value = social.website || '';
   loadHoursIntoPicker(biz.hours);
   loadPhotosIntoPicker(biz.photos);
+  setLogo(biz.logoUrl || ''); setCover(biz.imageUrl || '');
   loadMenuPhotosIntoPicker(biz.menuPhotos);
   loadHighlightsIntoPicker(biz.highlights);
   updateStudioModeUI(biz);
@@ -1917,7 +1959,6 @@ function clearStudioForm(){
   chosenDesign = 'food'; paintDesignCards();
   brandPicker.set('');
   updateHiringToggleUI(false);
-  currentBizImage = '';
   ['bName','bTagline','bCategory','bDescription','bAddress','bArea','bPhone','bEmail','bImageUrl',
    'aboutAccessibility','aboutServiceOptions','aboutPopularFor','aboutOfferings','aboutDiningOptions',
    'aboutAtmosphere','aboutCrowd','aboutPayments','aboutChildren','aboutParking',
@@ -1970,7 +2011,8 @@ document.getElementById('addBizBtn').addEventListener('click', async () => {
     phone: document.getElementById('bPhone').value,
     email: document.getElementById('bEmail').value,
     hours: hoursState,
-    imageUrl: (isEditing && currentBizImage) ? currentBizImage : (photosState[0] || document.getElementById('bImageUrl').value),
+    imageUrl: coverState || (isEditing ? '' : (photosState[0] || document.getElementById('bImageUrl').value)),
+    logoUrl: logoState,
     photos: photosState,
     menuPhotos: menuPhotosState,
     highlights: highlightsState,
@@ -2009,9 +2051,12 @@ document.getElementById('addBizBtn').addEventListener('click', async () => {
         document.getElementById('addMsg').textContent = 'Saved!';
         updateStudioModeUI({ ...body, hiring: data.business ? data.business.hiring : undefined });
       } else {
-        document.getElementById('addMsg').textContent = 'Created! It\'s live on the site now.';
-        populateStudioForm(data.business || { ...body, _id: data.id || data._id });
-        maybeShowPremiumPopupAfterGoLive();
+        document.getElementById('addMsg').textContent = 'Created! It\'s live on the site now. Taking you to the home page...';
+        document.getElementById('addBizBtn').disabled = true;
+        // The Premium popup shows once on the home page instead of here.
+        const seenKey = 'ttp_premium_popup_v2_' + myEmail;
+        if (myPlan !== 'premium' && !localStorage.getItem(seenKey)){ localStorage.setItem(seenKey, '1'); localStorage.setItem('ttp_premium_pending', '1'); }
+        setTimeout(() => { window.location.href = '/'; }, 1300);
       }
     } else {
       document.getElementById('addMsg').textContent = data.error || 'Could not save business.';

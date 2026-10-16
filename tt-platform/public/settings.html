@@ -50,6 +50,7 @@
   #bizSwitch { margin-top: 12px; width: 100%; }
   nav { padding: 14px 0; }
   .navItem { display: flex; justify-content: space-between; width: 100%; background: none; color: var(--text); text-align: left; border-radius: 0; padding: 12px 34px; font-size: 16px; font-weight: 400; }
+  .navItem.danger { color: #c0392b; }
   .navItem.active { background: var(--active); font-weight: 700; box-shadow: inset 4px 0 0 #e0562f; }
   .navItem .ext { color: var(--muted); font-size: 13px; }
   .navSep { height: 1px; background: var(--border); margin: 8px 34px; }
@@ -153,8 +154,8 @@
 <div id="app">
   <aside>
     <div class="bizHead">
-      <div class="bizAvatar" id="bizAvatar" role="button" tabindex="0" title="Click to change your business photo" style="cursor:pointer;"></div>
-      <div class="e" style="margin:-4px 0 6px;font-size:11px;">Click the picture to change your business photo</div>
+      <div class="bizAvatar" id="bizAvatar" role="button" tabindex="0" title="Click to change your business photo (shown on the home page)" style="cursor:pointer;"></div>
+      <div class="e" style="margin:-4px 0 6px;font-size:11px;">Click the picture to change your business photo. It shows on the home page.</div>
       <div class="n" id="bizName"></div>
       <div class="e" id="bizEmail"></div>
       <a class="viewLink" id="viewPage" href="#" target="_blank" rel="noopener">View my page ↗</a>
@@ -181,8 +182,6 @@
     <div class="panel" data-field="photos">
       <label>Logo</label><div class="photoGrid" id="g-logo"></div>
       <button type="button" class="ghost" data-add="logo" style="margin-top:8px;">Choose logo</button>
-      <label>Main photo</label><div class="hint" style="margin:-2px 0 6px;">Shows on the home page card, the outside of your business. Your page photo is changed by clicking your picture at the top left.</div><div class="photoGrid" id="g-main"></div>
-      <button type="button" class="ghost" data-add="main" style="margin-top:8px;">Choose main photo</button>
       <label>Photos of the business</label><div class="photoGrid" id="g-photos"></div>
       <button type="button" class="ghost" data-add="photos" style="margin-top:8px;">Add photos</button>
     </div>
@@ -255,12 +254,23 @@
       <h3 style="font-size:16px;margin:26px 0 4px;">Your job listings</h3><div id="jobsList"></div>
     </div>
 
+    <div class="panel" data-field="delete">
+      <p class="toolNote" style="border-left-color:#c0392b;">Do not want your business on TT Discover any more? You can remove it here at any time. Its page, photos, reviews, posts, jobs and deals will be removed for good. This cannot be undone.</p>
+      <label for="delName">Type the business name to confirm</label>
+      <input type="text" id="delName" autocomplete="off" placeholder="Type the exact business name">
+      <div class="savebar"><button type="button" id="deleteBizBtn" disabled style="background:#c0392b;color:#fff;border:none;border-radius:22px;padding:11px 22px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;">Delete Business</button></div>
+    </div>
+
     <div class="panel" data-field="staff">
       <p class="toolNote">Add a staff member and choose what they can manage. They sign in separately from the Staff Login link.</p>
       <label for="s-email">Email</label><input type="text" id="s-email" autocomplete="off">
       <label for="s-pass">Password</label><input type="text" id="s-pass" autocomplete="off">
       <label class="checkRow"><input type="checkbox" id="s-posts"> Can manage Posts</label>
       <label class="checkRow"><input type="checkbox" id="s-deals"> Can manage Deals</label>
+      <label class="checkRow"><input type="checkbox" id="s-jobs"> Can manage Job listings</label>
+      <label class="checkRow"><input type="checkbox" id="s-photos"> Can upload and remove Photos</label>
+      <label class="checkRow"><input type="checkbox" id="s-info"> Can edit Hours and contact info</label>
+      <label class="checkRow"><input type="checkbox" id="s-reviews"> Can reply to Reviews</label>
       <div class="savebar"><button type="button" class="primary" id="addStaffBtn">Add Staff Member</button><span class="msg" id="staffMsg" role="status"></span></div>
       <h3 style="font-size:16px;margin:26px 0 4px;">Current staff</h3><div id="staffList"></div>
     </div>
@@ -275,11 +285,6 @@
 
     <input type="file" id="photoInput" accept="image/*" multiple style="display:none;">
     <div class="savebar" id="savebar"><button type="button" class="primary" id="saveBtn">Save Changes</button><span class="msg" id="msg" role="status"></span></div>
-    <div id="dangerZone" style="display:none;margin-top:46px;padding-top:18px;border-top:1px solid var(--input-border,#ddd);">
-      <h3 style="font-size:15px;margin-bottom:4px;color:#c0392b;">Delete business</h3>
-      <p class="hint" style="margin-bottom:10px;">Do not want your business on TT Discover any more? You can remove it at any time.</p>
-      <button type="button" id="deleteBizBtn" style="background:#c0392b;color:#fff;border:none;border-radius:22px;padding:11px 22px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;">Delete Business</button>
-    </div>
   </main>
 </div>
 
@@ -319,7 +324,9 @@ const SECTIONS = [
   { id: 'analytics', label: 'Analytics', title: 'Analytics', noSave: true, subs: [['analytics','Analytics']], load: () => renderAnalytics() },
   { id: 'posts', label: 'Posts', title: 'Posts', noSave: true, subs: [['posts','Posts']], load: () => renderPosts() },
   { id: 'jobs', label: 'Jobs', title: 'Jobs', noSave: true, subs: [['jobs','Jobs']], load: () => renderJobs() },
-  { id: 'deals', label: 'Deals', title: 'Deals', noSave: true, subs: [['deals','Deals']], load: () => renderDeals() }
+  { id: 'deals', label: 'Deals', title: 'Deals', noSave: true, subs: [['deals','Deals']], load: () => renderDeals() },
+  { sep: true },
+  { id: 'delete', label: 'Delete Business', title: 'Delete Business', ownerOnly: true, noSave: true, danger: true, subs: [['delete','Delete Business']] }
 ];
 
 let me, list = [], biz = null, state = {}, activeSection = 'name', activeSub = 'name', hoursTouched = false, photoTarget = null;
@@ -351,7 +358,7 @@ function selectBiz(id){
   biz = list.find(b => b._id === id);
   $('bizSwitch').value = id;
   state = {
-    imageUrl: biz.imageUrl || '', coverUrl: biz.coverUrl || '', photos: [...(biz.photos || [])], menu: [...(biz.menuPhotos || [])], highlights: [...(biz.highlights || [])],
+    imageUrl: biz.imageUrl || '', photos: [...(biz.photos || [])], menu: [...(biz.menuPhotos || [])], highlights: [...(biz.highlights || [])],
     template: biz.template || 'food', hiring: !!biz.hiring, logoUrl: biz.logoUrl || '',
     menuItems: (biz.menuItems || []).map(i => ({ ...i })), highlightNames: [...(biz.highlightNames || [])]
   };
@@ -367,7 +374,7 @@ function selectBiz(id){
   ['facebook','instagram','website'].forEach(k => $('f-' + k).value = (biz.social || {})[k] || '');
   $('aboutFields').innerHTML = ABOUT.map(([k, l]) => `<label for="a-${k}">${l}</label><input type="text" id="a-${k}" maxlength="200" value="${esc((biz.about || {})[k] || '')}">`).join('');
   buildHours(); paintMenuItems();
-  $('dangerZone').style.display = biz.isOwner ? 'block' : 'none';
+  $('delName').value = ''; $('deleteBizBtn').disabled = true;
   paintHeader(); paintPhotos(); paintHiring(); buildNav(); { const cur = SECTIONS.find(x => x.id === activeSection); showSection(!cur || (cur.ownerOnly && !biz.isOwner) ? 'name' : activeSection); }
   $('msg').textContent = '';
 }
@@ -393,7 +400,7 @@ function paintDesigns(){
 function paintHeader(){
   $('bizName').textContent = $('f-name').value || biz.name;
   $('bizEmail').textContent = biz.email || me.email;
-  const av = state.coverUrl || state.imageUrl;
+  const av = state.imageUrl;
   $('bizAvatar').innerHTML = av ? `<img src="${av}" alt="">` : esc(((biz.name || '?')[0]).toUpperCase());
 }
 function paintHiring(){ document.querySelectorAll('#hiringSeg button').forEach(b => b.classList.toggle('on', (b.dataset.v === '1') === state.hiring)); }
@@ -404,7 +411,7 @@ function buildNav(){
     if (s.sep){ const d = document.createElement('div'); d.className = 'navSep'; $('nav').appendChild(d); return; }
     if (s.ownerOnly && !biz.isOwner) return;
     const b = document.createElement('button');
-    b.type = 'button'; b.className = 'navItem' + (s.id === activeSection ? ' active' : '');
+    b.type = 'button'; b.className = 'navItem' + (s.id === activeSection ? ' active' : '') + (s.danger ? ' danger' : '');
     b.innerHTML = `<span>${s.label}</span>`;
     b.addEventListener('click', () => showSection(s.id));
     $('nav').appendChild(b);
@@ -454,10 +461,10 @@ function readHours(){
 }
 
 // ---- Photos ----
-const GRIDS = { main: ['g-main', 'imageUrl'], photos: ['g-photos', 'photos'], menu: ['g-menu', 'menu'], highlights: ['g-highlights', 'highlights'], logo: ['g-logo', 'logoUrl'] };
+const GRIDS = { photos: ['g-photos', 'photos'], menu: ['g-menu', 'menu'], highlights: ['g-highlights', 'highlights'], logo: ['g-logo', 'logoUrl'] };
 function paintPhotos(){
   Object.entries(GRIDS).forEach(([key, [gid, sk]]) => {
-    const single = key === 'main' || key === 'logo';
+    const single = key === 'logo';
     const items = single ? (state[sk] ? [state[sk]] : []) : state[sk];
     $(gid).innerHTML = '';
     items.forEach((url, i) => {
@@ -493,7 +500,7 @@ function paintMenuItems(){
 }
 $('addItemBtn').addEventListener('click', () => { if (state.menuItems.length >= 80) return; state.menuItems.push({ name: '', price: '', section: '' }); paintMenuItems(); box_focus(); });
 function box_focus(){ const rows = document.querySelectorAll('.miRow'); if (rows.length) rows[rows.length - 1].querySelector('input').focus(); }
-document.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => { photoTarget = b.dataset.add; $('photoInput').multiple = photoTarget !== 'main' && photoTarget !== 'logo' && photoTarget !== 'cover'; $('photoInput').click(); }));
+document.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => { photoTarget = b.dataset.add; $('photoInput').multiple = photoTarget !== 'logo'; $('photoInput').click(); }));
 function shrink(file){
   return new Promise(res => {
     const r = new FileReader();
@@ -505,11 +512,12 @@ function shrink(file){
     r.readAsDataURL(file);
   });
 }
-function pickCover(){ photoTarget = 'cover'; $('photoInput').multiple = false; $('photoInput').click(); }
+function pickCover(){ photoTarget = 'main'; $('photoInput').multiple = false; $('photoInput').click(); }
 $('bizAvatar').addEventListener('click', pickCover);
 $('bizAvatar').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); pickCover(); } });
+$('delName').addEventListener('input', () => { $('deleteBizBtn').disabled = !biz || $('delName').value.trim().toLowerCase() !== String(biz.name || '').trim().toLowerCase(); });
 $('deleteBizBtn').addEventListener('click', async () => {
-  if (!biz || !biz.isOwner) return;
+  if (!biz || !biz.isOwner || $('deleteBizBtn').disabled) return;
   if (!(await ttConfirm('Delete "' + biz.name + '" for good? Its page, photos, reviews, posts, jobs and deals will be removed from TT Discover. This cannot be undone.', { title: 'Delete business', ok: 'Delete business', danger: true }))) return;
   const res = await fetch('/api/my/businesses/' + biz._id, { method: 'DELETE', headers: { 'x-auth-token': token } });
   const data = await res.json().catch(() => ({}));
@@ -522,7 +530,6 @@ $('photoInput').addEventListener('change', async e => {
   if (!files.length) return;
   const urls = await Promise.all(files.map(shrink));
   if (photoTarget === 'main') state.imageUrl = urls[0];
-  else if (photoTarget === 'cover') state.coverUrl = urls[0];
   else if (photoTarget === 'logo') state.logoUrl = urls[0];
   else {
     const sk = GRIDS[photoTarget][1], lim = biz.photoLimit || ttPhotoLimit(me.plan);
@@ -555,7 +562,7 @@ $('saveBtn').addEventListener('click', async () => {
   const body = {
     name: $('f-name').value, category: $('f-category').value, description: $('f-description').value,
     address: $('f-address').value, area: $('f-area').value, phone: $('f-phone').value, email: $('f-email').value,
-    imageUrl: state.imageUrl, coverUrl: state.coverUrl, photos: state.photos, menuPhotos: state.menu, highlights: state.highlights, about, social,
+    imageUrl: state.imageUrl, photos: state.photos, menuPhotos: state.menu, highlights: state.highlights, about, social,
     template: state.template, brandColor: brandPicker.get(), tagline: $('f-tagline').value, logoUrl: state.logoUrl, highlightNames: state.highlightNames.slice(0, state.highlights.length),
     menuItems: state.menuItems.filter(i => i.name.trim())
   };
@@ -671,7 +678,7 @@ async function renderStaff(){
   box.innerHTML = staff.length ? '' : empty('No staff added yet.');
   staff.forEach(m => {
     const p = m.permissions || {};
-    const badges = [p.posts ? '<span class="badge">Posts</span>' : '', p.deals ? '<span class="badge">Deals</span>' : ''].join('') || '<span class="badge">No permissions</span>';
+    const badges = [['posts', 'Posts'], ['deals', 'Deals'], ['jobs', 'Jobs'], ['photos', 'Photos'], ['info', 'Hours & contact'], ['reviews', 'Reviews']].filter(([k]) => p[k]).map(([k, l]) => '<span class="badge">' + l + '</span>').join('') || '<span class="badge">No permissions</span>';
     box.appendChild(listRow(`<b>${esc(m.email)}</b><div>${badges}</div>`, 'Remove', async () => { await api('staff/' + m._id, 'DELETE'); renderStaff(); }));
   });
 }
@@ -680,9 +687,9 @@ $('addStaffBtn').addEventListener('click', async () => {
   if (!email){ msg.textContent = 'An email is required.'; return; }
   if (password.length < 6){ msg.textContent = 'Password must be at least 6 characters.'; return; }
   msg.textContent = 'Adding...';
-  const res = await api('staff', 'POST', { email, password, posts: $('s-posts').checked, deals: $('s-deals').checked });
+  const res = await api('staff', 'POST', { email, password, posts: $('s-posts').checked, deals: $('s-deals').checked, jobs: $('s-jobs').checked, photos: $('s-photos').checked, info: $('s-info').checked, reviews: $('s-reviews').checked });
   const data = await res.json().catch(() => ({}));
-  if (res.ok){ msg.textContent = 'Added!'; $('s-email').value = ''; $('s-pass').value = ''; $('s-posts').checked = false; $('s-deals').checked = false; renderStaff(); }
+  if (res.ok){ msg.textContent = 'Added!'; $('s-email').value = ''; $('s-pass').value = ''; ['posts', 'deals', 'jobs', 'photos', 'info', 'reviews'].forEach(k => $('s-' + k).checked = false); renderStaff(); }
   else msg.textContent = data.error || 'Could not add staff member.';
 });
 
