@@ -124,6 +124,10 @@
     display: inline-block; margin-top: 6px; background: #e0562f; color: #fff;
     font-size: 11px; padding: 3px 8px; border-radius: 20px; font-weight: 600;
   }
+  .hireBadge {
+    display: inline-block; margin-top: 6px; margin-right: 4px; background: #1f6f5c; color: #fff;
+    font-size: 11px; padding: 3px 8px; border-radius: 20px; font-weight: 600;
+  }
   .featuredBadge {
     display: inline-block; margin-bottom: 4px; background: #f2a33c; color: #fff;
     font-size: 10px; padding: 2px 7px; border-radius: 20px; font-weight: 700; letter-spacing: 0.3px;
@@ -258,7 +262,6 @@
   <div id="detailContent"></div>
 </div>
 
-<div id="photoLightbox" role="dialog" aria-label="Photo"><span class="x" aria-hidden="true">✕</span><img alt=""></div>
 
 <div id="aboutModal">
   <div id="aboutPanel">
@@ -271,7 +274,7 @@
 </div>
 
 
-<div style="text-align:center;font-size:12px;opacity:.7;padding:18px 0 28px;"><a href="/terms.html" style="color:inherit;">Terms</a> · <a href="/privacy.html" style="color:inherit;">Privacy</a></div>
+<div style="text-align:center;font-size:12px;opacity:.7;padding:18px 0 28px;"><a href="/terms.html" style="color:inherit;">Terms</a> · <a href="/privacy.html" style="color:inherit;">Privacy</a> · <a href="/contact.html" style="color:inherit;">Contact us</a></div>
 <script src="/hours.js"></script>
 <script>
 let allBusinesses = [];
@@ -423,7 +426,7 @@ function cardHtml(biz){
       ${biz.isFeatured ? '<div class="featuredBadge">⭐ Featured</div>' : ''}
       <div class="cardName">${escapeHtml(biz.name)}</div>
       <div class="cardMeta">${escapeHtml(formatHours(biz.hours))}</div>
-      ${deals.length ? `<div class="dealBadge">${escapeHtml(deals[0].title)}</div>` : ''}
+      ${biz.hiring ? '<div class="hireBadge">💼 Hiring now</div>' : ''}${deals.length ? `<div class="dealBadge">${escapeHtml(deals[0].title)}</div>` : ''}
     </div>
   </div>`;
 }
@@ -617,18 +620,9 @@ document.getElementById('searchInput').addEventListener('input', (e) => {
 
 loadBusinesses();
 checkSignInStatus();
-function openPhoto(src){
-  const lb = document.getElementById('photoLightbox');
-  lb.querySelector('img').src = src; lb.classList.add('show');
-  document.getElementById('detailModal').style.overflow = 'hidden';
-}
-function closePhoto(){
-  document.getElementById('photoLightbox').classList.remove('show');
-  document.getElementById('detailModal').style.overflow = '';
-}
-document.getElementById('photoLightbox').addEventListener('click', closePhoto);
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePhoto(); });
+function openPhoto(src){ window.ttLightbox.open(src); }
 </script>
+<script src="/lightbox.js"></script>
 <script src="/premium.js"></script>
 </body>
 </html>

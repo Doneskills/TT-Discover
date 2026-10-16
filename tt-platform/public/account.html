@@ -489,6 +489,11 @@
             <label>Business Name</label>
             <input type="text" id="bName" placeholder="e.g. Casali's Pizza Cafe">
           </div>
+          <div class="studioField" data-group="namecat" data-field="tagline">
+            <label>Business Title</label>
+            <input type="text" id="bTagline" maxlength="60" placeholder="e.g. Home-style Creole food">
+            <div style="font-size:12px;color:var(--text-muted);margin-top:5px;">Shown big on your page next to the menu.</div>
+          </div>
           <div class="studioField" data-group="namecat" data-field="category">
             <label>Business Category</label>
             <input type="text" id="bCategory" placeholder="e.g. Restaurant, Salon, Auto Repair">
@@ -734,6 +739,7 @@ document.getElementById('studioTopAvatar').addEventListener('click', () => {
 
 // ---------------- Business Designs picker + "View it" preview ----------------
 const DESIGNS = [{ id: 'food', name: 'Food', blurb: 'Blue sidebar with Menu, Highlights, Reviews and Photos pages. Great for restaurants, bakeries and food trucks.', swatch: '#23659b' }, { id: 'fabric', name: 'Clothing and fabric', blurb: 'Warm brown and cream with a big bold name, a photo collage and a gallery. Great for boutiques, tailors and fabric shops.', swatch: '#2a1810' }, { id: 'beauty', name: 'Beauty', blurb: 'Soft rose and cream with an elegant name, a big hero photo and a Services price list. Great for salons, barbers, nail techs, spas and makeup artists.', swatch: '#7a3b4b' }, { id: 'build', name: 'Construction', blurb: 'Bold charcoal and safety yellow with a hero banner, a Services list, a Projects gallery and a one-tap Call button. Great for builders, plumbers, electricians and contractors.', swatch: '#f5b000' }, { id: 'bar', name: 'Bar and nightlife', premium: true, blurb: 'Dark with neon glow, a bold drinks menu and a Reserve button. Great for bars, lounges, clubs and late-night food.', swatch: '#d81b86' }, { id: 'learn', name: 'Classes and tutoring', premium: true, blurb: 'Bright and friendly with a Classes list and an Enrol button. Great for tutors, music and dance lessons and training centres.', swatch: '#1d5fd1' }, { id: 'farm', name: 'Farm and market', premium: true, blurb: "Earthy greens and warm tones with a What's fresh list. Great for farms, markets, produce sellers and bakers.", swatch: '#2f5d34' }, { id: 'office', name: 'Professional services', premium: true, blurb: 'Calm navy and gold with a Services list and a Book a consultation button. Great for lawyers, clinics, accountants and offices.', swatch: '#14284b' }];
+let currentBizImage = '';
 let chosenDesign = 'food';
 const brandPicker = ttBrandPicker({
   mount: document.getElementById('brandMount'),
@@ -757,7 +763,7 @@ paintDesignCards();
 function currentDraft(){
   const v = id => document.getElementById(id).value;
   return {
-    name: v('bName'), category: v('bCategory'), description: v('bDescription'), address: v('bAddress'), area: v('bArea'),
+    name: v('bName'), tagline: v('bTagline'), category: v('bCategory'), description: v('bDescription'), address: v('bAddress'), area: v('bArea'),
     phone: v('bPhone'), email: v('bEmail'), hours: hoursState,
     imageUrl: photosState[0] || v('bImageUrl'), photos: photosState, menuPhotos: menuPhotosState, highlights: highlightsState,
     social: { facebook: v('bSocialFacebook'), instagram: v('bSocialInstagram'), website: v('bSocialWebsite') },
@@ -1055,7 +1061,7 @@ function loadHighlightsIntoPicker(photos){
 
 // ---------------- Studio sidebar navigation ----------------
 const STUDIO_FIELD_LABELS = {
-  name: 'Business Name', category: 'Business Category',
+  name: 'Business Name', tagline: 'Business Title', category: 'Business Category',
   overview: 'Overview', menu: 'Menu',
   about: 'About',
   location: 'Location', hours: 'Date & Time Open', contact: 'Phone & Email',
@@ -1873,6 +1879,8 @@ function populateStudioForm(biz){
   chosenDesign = biz.template || 'food'; paintDesignCards();
   brandPicker.set(biz.brandColor || ''); brandPicker.designChanged();
   document.getElementById('bName').value = biz.name || '';
+  document.getElementById('bTagline').value = biz.tagline || '';
+  currentBizImage = biz.imageUrl || '';
   document.getElementById('bCategory').value = biz.category || '';
   document.getElementById('bDescription').value = biz.description || '';
   document.getElementById('bAddress').value = biz.address || '';
@@ -1909,7 +1917,8 @@ function clearStudioForm(){
   chosenDesign = 'food'; paintDesignCards();
   brandPicker.set('');
   updateHiringToggleUI(false);
-  ['bName','bCategory','bDescription','bAddress','bArea','bPhone','bEmail','bImageUrl',
+  currentBizImage = '';
+  ['bName','bTagline','bCategory','bDescription','bAddress','bArea','bPhone','bEmail','bImageUrl',
    'aboutAccessibility','aboutServiceOptions','aboutPopularFor','aboutOfferings','aboutDiningOptions',
    'aboutAtmosphere','aboutCrowd','aboutPayments','aboutChildren','aboutParking',
    'bSocialFacebook','bSocialInstagram','bSocialWebsite'].forEach(id => {
@@ -1953,6 +1962,7 @@ document.getElementById('addBizBtn').addEventListener('click', async () => {
   document.getElementById('addMsg').textContent = isEditing ? 'Saving...' : 'Creating...';
   const body = {
     name: document.getElementById('bName').value,
+    tagline: document.getElementById('bTagline').value,
     category: document.getElementById('bCategory').value,
     description: document.getElementById('bDescription').value,
     address: document.getElementById('bAddress').value,
@@ -1960,7 +1970,7 @@ document.getElementById('addBizBtn').addEventListener('click', async () => {
     phone: document.getElementById('bPhone').value,
     email: document.getElementById('bEmail').value,
     hours: hoursState,
-    imageUrl: photosState[0] || document.getElementById('bImageUrl').value,
+    imageUrl: (isEditing && currentBizImage) ? currentBizImage : (photosState[0] || document.getElementById('bImageUrl').value),
     photos: photosState,
     menuPhotos: menuPhotosState,
     highlights: highlightsState,

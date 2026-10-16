@@ -365,10 +365,10 @@
   </aside>
   <main id="main"><p class="empty">Loading...</p></main>
 </div>
-<div id="lightbox" role="dialog" aria-label="Photo"><span class="x" aria-hidden="true">✕</span><img alt=""></div>
 
 <script src="/ui.js"></script>
 <script src="/hours.js"></script>
+<script src="/lightbox.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
@@ -381,6 +381,8 @@ const token = localStorage.getItem('ttp_token') || '';
 let biz = null, me = null, sortMode = 'relevant', query = '', pickRating = 0;
 
 const DAYS = ['sun','mon','tue','wed','thu','fri','sat'];
+// The photo used on the business page. The "main photo" (imageUrl) is only for the home page card; older pages without a business photo keep using it.
+const pageCover = () => biz.coverUrl || biz.imageUrl || '';
 // Designs that use the hero + services layout, with their own page names and button text.
 const SV = {
   beauty: { menu: 'Services', photos: 'Gallery', cta: 'Call to book', feat: 'Favourites', none: 'No services listed yet.' },
@@ -396,6 +398,7 @@ function pages(){
   const l = t === 'fabric' ? [['home','Home'],['photos','Photos'],['reviews','Reviews']]
     : isSv(t) ? [['home','Home'],['menu',SV[t].menu],['photos',SV[t].photos],['reviews','Reviews']]
     : [['home','Home'],['menu','Menu'],['reviews','Reviews'],['photos','Photos']];
+  if (biz && aboutFilled()) l.splice(1, 0, ['about','About']);
   if (biz && (biz.posts || []).length) l.push(['posts','Posts']);
   if (biz && ((biz.jobs || []).length || biz.hiring)) l.push(['jobs','Jobs']);
   return l;
@@ -469,7 +472,7 @@ function render(){
   paintShell();
   const p = route();
   const m = $('main');
-  const inner = p === 'home' ? homeHtml() : p === 'menu' ? menuHtml() : p === 'reviews' ? reviewsHtml() : p === 'posts' ? postsHtml() : p === 'jobs' ? jobsHtml() : photosHtml();
+  const inner = p === 'home' ? homeHtml() : p === 'menu' ? menuHtml() : p === 'reviews' ? reviewsHtml() : p === 'posts' ? postsHtml() : p === 'jobs' ? jobsHtml() : p === 'about' ? aboutPageHtml() : photosHtml();
   document.documentElement.classList.toggle('fabric', biz.template === 'fabric');
   const hire = biz.hiring ? '<div class="hireBar"><a class="hireBtn" href="#jobs">💼 Hiring now</a></div>' : '';
   m.innerHTML = hire + ((biz.template === 'fabric' && p === 'home') ? inner + reportRowHtml() : (isSv(biz.template) && p === 'home') ? inner : `<div class="pad">${inner}${p === 'home' ? reportRowHtml() : ''}</div>`);
@@ -490,7 +493,7 @@ function render(){
   }
   m.querySelectorAll('.tile img, .collage img, .post img').forEach(i => i.addEventListener('click', () => {
     if (embed && window.parent !== window){ window.parent.postMessage({ ttOpenPhoto: i.src }, location.origin); return; }
-    $('lightbox').querySelector('img').src = i.src; $('lightbox').classList.add('show'); document.body.style.overflow = 'hidden';
+    window.ttLightbox.open(i.src);
   }));
 }
 
@@ -498,7 +501,7 @@ function tiles(urls, cls){ return urls.length ? `<div class="grid ${cls || ''}">
 
 function homeFabric(){
   const r = ratingOf(biz), st = openStatus(biz.hours);
-  const pics = [biz.imageUrl, ...(biz.photos || [])].filter(Boolean).slice(0, 3);
+  const pics = [pageCover(), ...(biz.photos || [])].filter(Boolean).slice(0, 3);
   const now = new Date();
   const deals = (biz.deals || []).filter(d => !d.endDate || new Date(d.endDate) >= now);
   const soc = biz.social || {};
@@ -529,8 +532,8 @@ function homeFabric(){
 }
 function homeService(){
   const r = ratingOf(biz), st = openStatus(biz.hours);
-  const pics = [biz.imageUrl, ...(biz.photos || [])].filter(Boolean);
-  const hero = biz.imageUrl || pics[0] || '';
+  const pics = [pageCover(), ...(biz.photos || [])].filter(Boolean);
+  const hero = pageCover() || pics[0] || '';
   const strip = pics.slice(hero === pics[0] ? 1 : 0, 5);
   const now = new Date();
   const deals = (biz.deals || []).filter(d => !d.endDate || new Date(d.endDate) >= now);
@@ -554,7 +557,6 @@ function homeService(){
       ${biz.description ? `<p class="desc">${esc(biz.description)}</p>` : ''}
       ${deals.map(d => `<div class="deal"><b>🔥 ${esc(d.title)}</b><br>${esc(d.description)}</div>`).join('')}
       ${strip.length ? `<div class="svStrip">${strip.map(u => `<img src="${u}" alt="" loading="lazy">`).join('')}</div>` : ''}
-      ${aboutHtml()}
       <div class="chips">${['facebook','instagram','website'].filter(k => soc[k]).map(k => `<a class="chip" href="${esc(soc[k])}" target="_blank" rel="noopener">${k[0].toUpperCase() + k.slice(1)}</a>`).join('')}</div>
       ${reportRowHtml()}
     </div>`;
@@ -563,7 +565,7 @@ function homeHtml(){
   if (biz.template === 'fabric') return homeFabric();
   if (isSv(biz.template)) return homeService();
   const r = ratingOf(biz), st = openStatus(biz.hours);
-  const pics = [biz.imageUrl, ...(biz.photos || [])].filter(Boolean).slice(0, 6);
+  const pics = [pageCover(), ...(biz.photos || [])].filter(Boolean).slice(0, 6);
   const now = new Date();
   const deals = (biz.deals || []).filter(d => !d.endDate || new Date(d.endDate) >= now);
   const soc = biz.social || {};
@@ -577,7 +579,6 @@ function homeHtml(){
     <hr class="rule" style="margin-top:22px">
     <h2 class="sec">Description</h2>
     <p class="desc">${esc(biz.description) || '<span class="empty">No description yet.</span>'}</p>
-    ${aboutHtml()}
     ${deals.map(d => `<div class="deal"><b>🔥 ${esc(d.title)}</b><br>${esc(d.description)}</div>`).join('')}
     <div class="chips">${['facebook','instagram','website'].filter(k => soc[k]).map(k => `<a class="chip" href="${esc(soc[k])}" target="_blank" rel="noopener">${k[0].toUpperCase() + k.slice(1)}</a>`).join('')}</div>
     <div class="contact">
@@ -587,6 +588,11 @@ function homeHtml(){
 }
 
 const ABOUT_LABELS = { accessibility: 'Accessibility', serviceOptions: 'Service options', popularFor: 'Popular for', offerings: 'Offerings', diningOptions: 'Dining options', atmosphere: 'Atmosphere', crowd: 'Crowd', payments: 'Payments', children: 'Children', parking: 'Parking' };
+function aboutFilled(){ const a = (biz && biz.about) || {}; return Object.keys(ABOUT_LABELS).some(k => a[k]); }
+function aboutPageHtml(){
+  const a = biz.about || {};
+  return `<h2 class="sec">About</h2><hr class="rule" style="margin-top:0">` + Object.keys(ABOUT_LABELS).filter(k => a[k]).map(k => `<div class="aboutRow"><b>${ABOUT_LABELS[k]}:</b> ${esc(a[k])}</div>`).join('');
+}
 function aboutHtml(){
   const a = biz.about || {};
   const rows = Object.keys(ABOUT_LABELS).filter(k => a[k]).map(k => `<div class="aboutRow"><b>${ABOUT_LABELS[k]}:</b> ${esc(a[k])}</div>`).join('');
@@ -642,7 +648,7 @@ function shrink(file){
   });
 }
 let custPhotos = [], custLoaded = false, photoFilter = 'all';
-function ownerPhotoList(){ return [biz.imageUrl, ...(biz.photos || []), ...(biz.menuPhotos || []), ...(biz.highlights || [])].filter(Boolean); }
+function ownerPhotoList(){ return [pageCover(), ...(biz.photos || []), ...(biz.menuPhotos || []), ...(biz.highlights || [])].filter(Boolean); }
 function photosHtml(){
   const owner = ownerPhotoList().map(u => ({ url: u, by: '' }));
   const cust = custPhotos.map(c => ({ url: c.url, by: c.username ? '@' + c.username : 'Customer', uid: c.userId, id: c._id, del: !!(me && (c.userId === me.id || isOwner())) }));
@@ -704,7 +710,7 @@ function reportBtn(type, target, contentUserId){
 }
 function reportRowHtml(){
   if (previewMode) return '';
-  return `<div class="reportRow${biz.template === 'fabric' ? ' fab' : ''}">${reportBtn('business', bizId)} · <a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a></div>`;
+  return `<div class="reportRow${biz.template === 'fabric' ? ' fab' : ''}">${reportBtn('business', bizId)} · <a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a> · <a href="/contact.html">Contact us</a></div>`;
 }
 document.addEventListener('click', e => {
   const btn = e.target.closest('.reportLink');
@@ -804,9 +810,6 @@ $('themeBtn').addEventListener('click', () => {
   applyTheme(next);
 });
 window.addEventListener('storage', e => { if (e.key === 'tt_theme') applyTheme(e.newValue === 'dark' ? 'dark' : 'light'); });
-function closeLightbox(){ $('lightbox').classList.remove('show'); document.body.style.overflow = ''; }
-$('lightbox').addEventListener('click', closeLightbox);
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
 window.addEventListener('hashchange', render);
 if (embed && embedMinH) document.querySelector('.shell').style.minHeight = embedMinH + 'px';
 if (embed && window.ResizeObserver) new ResizeObserver(sendHeight).observe(document.querySelector('.shell'));

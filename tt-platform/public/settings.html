@@ -153,7 +153,8 @@
 <div id="app">
   <aside>
     <div class="bizHead">
-      <div class="bizAvatar" id="bizAvatar"></div>
+      <div class="bizAvatar" id="bizAvatar" role="button" tabindex="0" title="Click to change your business photo" style="cursor:pointer;"></div>
+      <div class="e" style="margin:-4px 0 6px;font-size:11px;">Click the picture to change your business photo</div>
       <div class="n" id="bizName"></div>
       <div class="e" id="bizEmail"></div>
       <a class="viewLink" id="viewPage" href="#" target="_blank" rel="noopener">View my page ↗</a>
@@ -180,7 +181,7 @@
     <div class="panel" data-field="photos">
       <label>Logo</label><div class="photoGrid" id="g-logo"></div>
       <button type="button" class="ghost" data-add="logo" style="margin-top:8px;">Choose logo</button>
-      <label>Main photo</label><div class="photoGrid" id="g-main"></div>
+      <label>Main photo</label><div class="hint" style="margin:-2px 0 6px;">Shows on the home page card, the outside of your business. Your page photo is changed by clicking your picture at the top left.</div><div class="photoGrid" id="g-main"></div>
       <button type="button" class="ghost" data-add="main" style="margin-top:8px;">Choose main photo</button>
       <label>Photos of the business</label><div class="photoGrid" id="g-photos"></div>
       <button type="button" class="ghost" data-add="photos" style="margin-top:8px;">Add photos</button>
@@ -274,6 +275,11 @@
 
     <input type="file" id="photoInput" accept="image/*" multiple style="display:none;">
     <div class="savebar" id="savebar"><button type="button" class="primary" id="saveBtn">Save Changes</button><span class="msg" id="msg" role="status"></span></div>
+    <div id="dangerZone" style="display:none;margin-top:46px;padding-top:18px;border-top:1px solid var(--input-border,#ddd);">
+      <h3 style="font-size:15px;margin-bottom:4px;color:#c0392b;">Delete business</h3>
+      <p class="hint" style="margin-bottom:10px;">Do not want your business on TT Discover any more? You can remove it at any time.</p>
+      <button type="button" id="deleteBizBtn" style="background:#c0392b;color:#fff;border:none;border-radius:22px;padding:11px 22px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;">Delete Business</button>
+    </div>
   </main>
 </div>
 
@@ -345,7 +351,7 @@ function selectBiz(id){
   biz = list.find(b => b._id === id);
   $('bizSwitch').value = id;
   state = {
-    imageUrl: biz.imageUrl || '', photos: [...(biz.photos || [])], menu: [...(biz.menuPhotos || [])], highlights: [...(biz.highlights || [])],
+    imageUrl: biz.imageUrl || '', coverUrl: biz.coverUrl || '', photos: [...(biz.photos || [])], menu: [...(biz.menuPhotos || [])], highlights: [...(biz.highlights || [])],
     template: biz.template || 'food', hiring: !!biz.hiring, logoUrl: biz.logoUrl || '',
     menuItems: (biz.menuItems || []).map(i => ({ ...i })), highlightNames: [...(biz.highlightNames || [])]
   };
@@ -361,6 +367,7 @@ function selectBiz(id){
   ['facebook','instagram','website'].forEach(k => $('f-' + k).value = (biz.social || {})[k] || '');
   $('aboutFields').innerHTML = ABOUT.map(([k, l]) => `<label for="a-${k}">${l}</label><input type="text" id="a-${k}" maxlength="200" value="${esc((biz.about || {})[k] || '')}">`).join('');
   buildHours(); paintMenuItems();
+  $('dangerZone').style.display = biz.isOwner ? 'block' : 'none';
   paintHeader(); paintPhotos(); paintHiring(); buildNav(); { const cur = SECTIONS.find(x => x.id === activeSection); showSection(!cur || (cur.ownerOnly && !biz.isOwner) ? 'name' : activeSection); }
   $('msg').textContent = '';
 }
@@ -386,7 +393,8 @@ function paintDesigns(){
 function paintHeader(){
   $('bizName').textContent = $('f-name').value || biz.name;
   $('bizEmail').textContent = biz.email || me.email;
-  $('bizAvatar').innerHTML = state.imageUrl ? `<img src="${state.imageUrl}" alt="">` : esc(((biz.name || '?')[0]).toUpperCase());
+  const av = state.coverUrl || state.imageUrl;
+  $('bizAvatar').innerHTML = av ? `<img src="${av}" alt="">` : esc(((biz.name || '?')[0]).toUpperCase());
 }
 function paintHiring(){ document.querySelectorAll('#hiringSeg button').forEach(b => b.classList.toggle('on', (b.dataset.v === '1') === state.hiring)); }
 
@@ -485,7 +493,7 @@ function paintMenuItems(){
 }
 $('addItemBtn').addEventListener('click', () => { if (state.menuItems.length >= 80) return; state.menuItems.push({ name: '', price: '', section: '' }); paintMenuItems(); box_focus(); });
 function box_focus(){ const rows = document.querySelectorAll('.miRow'); if (rows.length) rows[rows.length - 1].querySelector('input').focus(); }
-document.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => { photoTarget = b.dataset.add; $('photoInput').multiple = photoTarget !== 'main' && photoTarget !== 'logo'; $('photoInput').click(); }));
+document.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => { photoTarget = b.dataset.add; $('photoInput').multiple = photoTarget !== 'main' && photoTarget !== 'logo' && photoTarget !== 'cover'; $('photoInput').click(); }));
 function shrink(file){
   return new Promise(res => {
     const r = new FileReader();
@@ -497,11 +505,24 @@ function shrink(file){
     r.readAsDataURL(file);
   });
 }
+function pickCover(){ photoTarget = 'cover'; $('photoInput').multiple = false; $('photoInput').click(); }
+$('bizAvatar').addEventListener('click', pickCover);
+$('bizAvatar').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); pickCover(); } });
+$('deleteBizBtn').addEventListener('click', async () => {
+  if (!biz || !biz.isOwner) return;
+  if (!(await ttConfirm('Delete "' + biz.name + '" for good? Its page, photos, reviews, posts, jobs and deals will be removed from TT Discover. This cannot be undone.', { title: 'Delete business', ok: 'Delete business', danger: true }))) return;
+  const res = await fetch('/api/my/businesses/' + biz._id, { method: 'DELETE', headers: { 'x-auth-token': token } });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok){ ttAlert(data.error || 'Could not delete the business.'); return; }
+  await ttAlert('Your business was deleted.');
+  location.href = '/account.html';
+});
 $('photoInput').addEventListener('change', async e => {
   const files = [...e.target.files].filter(f => f.type.startsWith('image/')); e.target.value = '';
   if (!files.length) return;
   const urls = await Promise.all(files.map(shrink));
   if (photoTarget === 'main') state.imageUrl = urls[0];
+  else if (photoTarget === 'cover') state.coverUrl = urls[0];
   else if (photoTarget === 'logo') state.logoUrl = urls[0];
   else {
     const sk = GRIDS[photoTarget][1], lim = biz.photoLimit || ttPhotoLimit(me.plan);
@@ -534,7 +555,7 @@ $('saveBtn').addEventListener('click', async () => {
   const body = {
     name: $('f-name').value, category: $('f-category').value, description: $('f-description').value,
     address: $('f-address').value, area: $('f-area').value, phone: $('f-phone').value, email: $('f-email').value,
-    imageUrl: state.imageUrl, photos: state.photos, menuPhotos: state.menu, highlights: state.highlights, about, social,
+    imageUrl: state.imageUrl, coverUrl: state.coverUrl, photos: state.photos, menuPhotos: state.menu, highlights: state.highlights, about, social,
     template: state.template, brandColor: brandPicker.get(), tagline: $('f-tagline').value, logoUrl: state.logoUrl, highlightNames: state.highlightNames.slice(0, state.highlights.length),
     menuItems: state.menuItems.filter(i => i.name.trim())
   };

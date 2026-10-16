@@ -43,7 +43,7 @@ function parseFrom(str){
   return { name: 'TT Discover', email: String(str).trim() };
 }
 
-async function sendMail(to, subject, html){
+async function sendMail(to, subject, html, replyTo){
   if (!mailEnabled){
     const links = (String(html).match(/href="([^"]+)"/g) || []).map(h => h.slice(6, -1));
     console.log(`[email not sent — email not set up] To: ${to} | Subject: ${subject}${links.length ? ' | Link: ' + links.join(' ') : ''}`);
@@ -57,7 +57,7 @@ async function sendMail(to, subject, html){
         const r = await fetch('https://api.brevo.com/v3/smtp/email', {
           method: 'POST',
           headers: { 'api-key': BREVO_API_KEY, 'content-type': 'application/json', accept: 'application/json' },
-          body: JSON.stringify({ sender: parseFrom(MAIL_FROM), to: [{ email: to }], subject, htmlContent: html }),
+          body: JSON.stringify({ sender: parseFrom(MAIL_FROM), to: [{ email: to }], subject, htmlContent: html, ...(replyTo ? { replyTo: { email: replyTo } } : {}) }),
           signal: ctrl.signal
         });
         if (!r.ok){
@@ -66,7 +66,7 @@ async function sendMail(to, subject, html){
         }
       } finally { clearTimeout(timer); }
     } else {
-      await mailTransporter.sendMail({ from: MAIL_FROM, to, subject, html });
+      await mailTransporter.sendMail({ from: MAIL_FROM, to, subject, html, ...(replyTo ? { replyTo } : {}) });
     }
   } catch (err) {
     console.error(`Email to ${to} failed:`, err.message);
@@ -566,6 +566,24 @@ app.post('/api/reset-password', async (req, res) => {
   }
 });
 
+// "Contact us": anyone can write to the site owner about a problem. No account needed.
+app.post('/api/contact', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const name = String(b.name || '').trim().slice(0, 80);
+    const email = String(b.email || '').trim().slice(0, 150);
+    const topic = String(b.topic || 'Something else').trim().slice(0, 60);
+    const message = String(b.message || '').trim().slice(0, 2000);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Please enter a valid email so we can reply.' });
+    if (message.length < 10) return res.status(400).json({ error: 'Please write a few sentences so we can help.' });
+    if (!rateCheck('contact:' + req.ip, 5, 60 * 60 * 1000)) return res.status(429).json({ error: 'You have sent several messages. Please try again later.' });
+    if (!process.env.ADMIN_EMAIL) return res.status(503).json({ error: 'Contact is not set up yet. Please try again later.' });
+    await sendMail(process.env.ADMIN_EMAIL, `TT Discover contact: ${topic}`,
+      `<p><b>From:</b> ${escapeHtml(name || 'Not given')} (${escapeHtml(email)})</p><p><b>About:</b> ${escapeHtml(topic)}</p><p>${escapeHtml(message).replace(/\n/g, '<br>')}</p><p style="color:#888;font-size:12px;">Reply to this email to answer them.</p>`, email);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Could not send your message.' }); }
+});
+
 app.get('/api/me', requireUser, async (req, res) => {
   let user = req.user;
   if (user.plan === 'premium' && user.premiumMethod === 'wipay' && user.premiumExpiresAt && new Date(user.premiumExpiresAt) < new Date()){
@@ -895,6 +913,8 @@ app.post('/api/my/businesses', requireUser, requireVerified, requireBusinessAcco
       email: String(b.email || '').slice(0, 150),
       hours: sanitizeHours(b.hours),
       imageUrl: String(b.imageUrl || '').slice(0, 400000),
+      coverUrl: String(b.coverUrl || '').slice(0, 400000),
+      tagline: String(b.tagline || '').trim().slice(0, 60),
       photos: sanitizePhotoArray(b.photos),
       menuPhotos: sanitizePhotoArray(b.menuPhotos),
       highlights: sanitizePhotoArray(b.highlights),
@@ -965,6 +985,7 @@ app.put('/api/my/businesses/:id', requireUser, requireBusinessAccount, async (re
     if (typeof b.email === 'string') update.email = b.email.slice(0, 150);
     if (b.hours) update.hours = sanitizeHours(b.hours);
     if (typeof b.imageUrl === 'string') update.imageUrl = b.imageUrl.slice(0, 400000);
+    if (typeof b.coverUrl === 'string') update.coverUrl = b.coverUrl.slice(0, 400000);
     if (Array.isArray(b.photos)) update.photos = sanitizePhotoArray(b.photos);
     if (Array.isArray(b.menuPhotos)) update.menuPhotos = sanitizePhotoArray(b.menuPhotos);
     if (Array.isArray(b.highlights)) update.highlights = sanitizePhotoArray(b.highlights);
@@ -1002,6 +1023,7 @@ app.delete('/api/my/businesses/:id', requireUser, requireBusinessAccount, async 
       return res.status(403).json({ error: 'You can only delete your own listing.' });
     }
     await businessesCol.deleteOne({ _id: biz._id });
+    if (reportsCol) await reportsCol.updateMany({ bizId: req.params.id, status: 'open' }, { $set: { status: 'removed', closedAt: new Date() } });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Could not delete business.' });
