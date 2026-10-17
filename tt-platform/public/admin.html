@@ -75,6 +75,11 @@
     <h1 style="font-size:16px;">🚫 Banned accounts <span id="banCount" style="color:#cbbfae;font-weight:400;"></span></h1>
     <div id="banList"><div class="msg">Loading...</div></div>
     <hr>
+    <h1 style="font-size:16px;">🖼️ Photo storage</h1>
+    <div class="msg" style="color:#cbbfae;">Moves photos that are still stored inside businesses, accounts and customer uploads into the new image storage. Safe to run more than once.</div>
+    <button id="migrateBtn" type="button">Move photos now</button>
+    <div class="msg" id="migrateMsg" role="status"></div>
+    <hr>
     <h1 style="font-size:16px;">Existing Listings</h1>
     <div id="bizList"></div>
   </div>
@@ -263,6 +268,19 @@ async function loadList(){
     box.appendChild(row);
   });
 }
+
+document.getElementById('migrateBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('migrateBtn'), msg = document.getElementById('migrateMsg');
+  if (!(await ttConfirm('Move all stored photos into the new image storage now? This can take a minute.', { title: 'Move photos', ok: 'Move photos' }))) return;
+  btn.disabled = true; msg.textContent = 'Working... please keep this page open.';
+  try {
+    const res = await fetch('/api/admin/migrate-photos', { method: 'POST', headers: { 'x-admin-password': adminPassword } });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok){ msg.textContent = d.error || 'Something went wrong.'; }
+    else msg.textContent = 'Done. Photos moved: ' + d.converted + ' (businesses updated: ' + d.businesses + ', accounts: ' + d.users + ', customer photos: ' + d.customerPhotos + '). Could not read: ' + d.failed + '.';
+  } catch (e) { msg.textContent = 'Could not reach the site. Try again.'; }
+  btn.disabled = false;
+});
 
 document.getElementById('loginBox').style.display = 'block';
 </script>

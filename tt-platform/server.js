@@ -85,13 +85,40 @@ async function notifyAreaCustomers(area, subject, buildHtml){
   }
 }
 
-// Photo arrays, stored as data URLs (already resized/compressed client-side).
-// Used for the business's own photo gallery, menu photos and highlights.
+// ---------------- Image storage ----------------
+// Photos arrive from the browser as small compressed data URLs. We save the picture itself once, in its own
+// "images" collection, and keep only a short link like /img/<id> on the business, user or post.
+// The same picture is never saved twice (matched by a fingerprint), and /img/<id> is cached by browsers.
+const IMG_DATA_RE = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/;
+const IMG_MAX_BYTES = 1.5 * 1024 * 1024;
+const isDataImage = v => typeof v === 'string' && v.startsWith('data:image/');
+async function storeImage(value){
+  const s = String(value || '').trim();
+  if (!s) return '';
+  if (/^\/img\/[a-f0-9]{24}$/.test(s)) return s;           // already stored
+  if (!s.startsWith('data:')) return s.slice(0, 2000);       // an ordinary link: keep as is
+  const m = IMG_DATA_RE.exec(s);
+  if (!m || !imagesCol) return '';
+  const buf = Buffer.from(m[2], 'base64');
+  if (!buf.length || buf.length > IMG_MAX_BYTES) return '';
+  const hash = crypto.createHash('sha256').update(buf).digest('hex');
+  const found = await imagesCol.findOne({ hash }, { projection: { _id: 1 } });
+  if (found) return '/img/' + found._id.toString();
+  const r = await imagesCol.insertOne({ hash, type: 'image/' + m[1], data: buf, size: buf.length, createdAt: new Date() });
+  return '/img/' + r.insertedId.toString();
+}
+
+// Photo arrays for the business's own gallery, menu photos and highlights.
 // How many each group may hold depends on the owner's plan (customer photos on the Photos page are separate and not limited by this).
 const PHOTO_LIMIT = { free: 5, premium: 20 };
-function sanitizePhotoArray(arr){
+async function sanitizePhotoArray(arr){
   if (!Array.isArray(arr)) return [];
-  return arr.slice(0, PHOTO_LIMIT.premium).map(u => String(u || '').slice(0, 400000)).filter(Boolean);
+  const out = [];
+  for (const u of arr.slice(0, PHOTO_LIMIT.premium)){
+    const stored = await storeImage(u);
+    if (stored) out.push(stored);
+  }
+  return out;
 }
 function effectivePlan(u){
   if (!u || u.plan !== 'premium') return 'free';
@@ -183,6 +210,7 @@ let usersCol = null;
 let photosCol = null;
 let invitesCol = null;
 let reportsCol = null;
+let imagesCol = null;
 
 // ---------------- Weekly hours (Mon-Sun open/close per day) ----------------
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -248,6 +276,8 @@ async function initDb(){
     photosCol = db.collection('photoUploads');
     invitesCol = db.collection('collabInvites');
     reportsCol = db.collection('reports');
+    imagesCol = db.collection('images');
+    imagesCol.createIndex({ hash: 1 }).catch(() => {});
     console.log('Connected to database.');
   } catch (err) {
     console.error('Database connection failed:', err.message);
@@ -431,6 +461,58 @@ function escapeHtml(s){
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
+
+// Serves a stored picture. The link never changes for a picture, so browsers may keep it for a year.
+app.get('/img/:id', async (req, res) => {
+  if (!imagesCol) return res.status(404).end();
+  try {
+    const doc = await imagesCol.findOne({ _id: new ObjectId(req.params.id) });
+    if (!doc || !doc.data) return res.status(404).end();
+    const buf = Buffer.from(doc.data.buffer);
+    res.set({ 'Content-Type': doc.type || 'image/jpeg', 'Content-Length': buf.length, 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' });
+    res.end(buf);
+  } catch (err) { res.status(404).end(); }
+});
+
+// One-time (safe to repeat): moves photos that are still stored inside businesses, users and customer
+// uploads into the images collection. Run it from the Admin page.
+app.post('/api/admin/migrate-photos', requireAdmin, async (req, res) => {
+  if (!imagesCol || !businessesCol || !usersCol || !photosCol) return res.status(503).json({ error: 'Database not connected' });
+  const stats = { converted: 0, failed: 0, businesses: 0, users: 0, customerPhotos: 0 };
+  const conv = async v => {
+    if (!isDataImage(v)) return v;
+    const r = await storeImage(v);
+    if (r){ stats.converted++; return r; }
+    stats.failed++; return v;   // could not be read: leave it exactly as it was
+  };
+  try {
+    for await (const biz of businessesCol.find({})){
+      const set = {};
+      for (const k of ['imageUrl', 'logoUrl']) if (isDataImage(biz[k])) set[k] = await conv(biz[k]);
+      for (const k of ['photos', 'menuPhotos', 'highlights']){
+        if (Array.isArray(biz[k]) && biz[k].some(isDataImage)){
+          const arr = []; for (const u of biz[k]) arr.push(await conv(u)); set[k] = arr;
+        }
+      }
+      if (Array.isArray(biz.posts) && biz.posts.some(p => p && isDataImage(p.imageUrl))){
+        const posts = []; for (const p of biz.posts) posts.push(p && isDataImage(p.imageUrl) ? { ...p, imageUrl: await conv(p.imageUrl) } : p); set.posts = posts;
+      }
+      if (Object.keys(set).length){ await businessesCol.updateOne({ _id: biz._id }, { $set: set }); stats.businesses++; }
+    }
+    for await (const u of usersCol.find({ avatarUrl: { $regex: '^data:image/' } }, { projection: { avatarUrl: 1 } })){
+      const v = await conv(u.avatarUrl);
+      if (v !== u.avatarUrl){ await usersCol.updateOne({ _id: u._id }, { $set: { avatarUrl: v } }); stats.users++; }
+    }
+    for await (const ph of photosCol.find({ url: { $regex: '^data:image/' } }, { projection: { url: 1 } })){
+      const v = await conv(ph.url);
+      if (v !== ph.url){ await photosCol.updateOne({ _id: ph._id }, { $set: { url: v } }); stats.customerPhotos++; }
+    }
+    res.json({ ok: true, ...stats });
+  } catch (err) {
+    console.error('Photo migration failed:', err.message);
+    res.status(500).json({ error: 'Stopped part-way: ' + err.message + '. Nothing was lost; run it again to continue.', ...stats });
+  }
+});
 
 app.get('/biz/:id', async (req, res) => {
   if (!businessesCol) return res.status(404).send('Not found');
@@ -670,8 +752,9 @@ app.post('/api/me/profile', requireUser, async (req, res) => {
     if (avatarUrl.length > 2 * 1024 * 1024){
       return res.status(400).json({ error: 'That image is too large — please choose a smaller one.' });
     }
-    await usersCol.updateOne({ _id: req.user._id }, { $set: { username, realName, bio, avatarUrl } });
-    res.json({ ok: true, username, realName, bio, avatarUrl });
+    const storedAvatar = await storeImage(avatarUrl);
+    await usersCol.updateOne({ _id: req.user._id }, { $set: { username, realName, bio, avatarUrl: storedAvatar } });
+    res.json({ ok: true, username, realName, bio, avatarUrl: storedAvatar });
   } catch (err) {
     res.status(500).json({ error: 'Could not save profile.' });
   }
@@ -862,9 +945,11 @@ app.post('/api/businesses/:id/photos', requireUser, requireVerified, async (req,
     if (recent >= 5) return res.status(429).json({ error: 'You can add up to 5 photos per day for each business.' });
     const total = await photosCol.countDocuments({ bizId: req.params.id });
     if (total >= 200) return res.status(400).json({ error: 'This page has reached its photo limit.' });
-    const doc = { bizId: req.params.id, userId: req.user._id.toString(), username: String(req.user.username || '').slice(0, 60), url, createdAt: new Date() };
+    const storedUrl = await storeImage(url);
+    if (!storedUrl) return res.status(400).json({ error: 'Please choose a photo.' });
+    const doc = { bizId: req.params.id, userId: req.user._id.toString(), username: String(req.user.username || '').slice(0, 60), url: storedUrl, createdAt: new Date() };
     const r = await photosCol.insertOne(doc);
-    res.json({ photo: { _id: r.insertedId.toString(), url, username: doc.username, userId: doc.userId, createdAt: doc.createdAt } });
+    res.json({ photo: { _id: r.insertedId.toString(), url: storedUrl, username: doc.username, userId: doc.userId, createdAt: doc.createdAt } });
   } catch (err) { res.status(400).json({ error: 'Could not add your photo.' }); }
 });
 
@@ -912,12 +997,12 @@ app.post('/api/my/businesses', requireUser, requireVerified, requireBusinessAcco
       phone: String(b.phone || '').slice(0, 40),
       email: String(b.email || '').slice(0, 150),
       hours: sanitizeHours(b.hours),
-      imageUrl: String(b.imageUrl || '').slice(0, 400000),
-      logoUrl: String(b.logoUrl || '').slice(0, 400000),
+      imageUrl: await storeImage(b.imageUrl),
+      logoUrl: await storeImage(b.logoUrl),
       tagline: String(b.tagline || '').trim().slice(0, 60),
-      photos: sanitizePhotoArray(b.photos),
-      menuPhotos: sanitizePhotoArray(b.menuPhotos),
-      highlights: sanitizePhotoArray(b.highlights),
+      photos: await sanitizePhotoArray(b.photos),
+      menuPhotos: await sanitizePhotoArray(b.menuPhotos),
+      highlights: await sanitizePhotoArray(b.highlights),
       template: TEMPLATES.includes(b.template) && templateAllowed(b.template, req.user, '') ? b.template : 'food',
       brandColor: sanitizeColor(b.brandColor),
       about: sanitizeAbout(b.about),
@@ -984,10 +1069,10 @@ app.put('/api/my/businesses/:id', requireUser, requireBusinessAccount, async (re
     if (typeof b.phone === 'string') update.phone = b.phone.slice(0, 40);
     if (typeof b.email === 'string') update.email = b.email.slice(0, 150);
     if (b.hours) update.hours = sanitizeHours(b.hours);
-    if (typeof b.imageUrl === 'string') update.imageUrl = b.imageUrl.slice(0, 400000);
-    if (Array.isArray(b.photos)) update.photos = sanitizePhotoArray(b.photos);
-    if (Array.isArray(b.menuPhotos)) update.menuPhotos = sanitizePhotoArray(b.menuPhotos);
-    if (Array.isArray(b.highlights)) update.highlights = sanitizePhotoArray(b.highlights);
+    if (typeof b.imageUrl === 'string') update.imageUrl = await storeImage(b.imageUrl);
+    if (Array.isArray(b.photos)) update.photos = await sanitizePhotoArray(b.photos);
+    if (Array.isArray(b.menuPhotos)) update.menuPhotos = await sanitizePhotoArray(b.menuPhotos);
+    if (Array.isArray(b.highlights)) update.highlights = await sanitizePhotoArray(b.highlights);
     if (typeof b.hiring === 'boolean') update.hiring = b.hiring;
     if (TEMPLATES.includes(b.template)){
       if (!templateAllowed(b.template, ownerUser, biz.template)) return res.status(403).json({ error: 'That design is for Premium businesses. Pick one of the free designs, or upgrade to Premium.' });
@@ -995,7 +1080,7 @@ app.put('/api/my/businesses/:id', requireUser, requireBusinessAccount, async (re
     }
     if (typeof b.brandColor === 'string') update.brandColor = sanitizeColor(b.brandColor);
     if (typeof b.tagline === 'string') update.tagline = b.tagline.trim().slice(0, 60);
-    if (typeof b.logoUrl === 'string') update.logoUrl = b.logoUrl.slice(0, 400000);
+    if (typeof b.logoUrl === 'string') update.logoUrl = await storeImage(b.logoUrl);
     if (Array.isArray(b.highlightNames)) update.highlightNames = b.highlightNames.slice(0, 10).map(n => String(n || '').trim().slice(0, 40));
     if (Array.isArray(b.menuItems)){
       update.menuItems = b.menuItems.slice(0, 80).map(i => ({
@@ -1054,7 +1139,7 @@ app.post('/api/my/businesses/:id/posts', requireBizPermission('posts'), async (r
       _id: new ObjectId(),
       title,
       content: String(b.content || '').slice(0, 1000),
-      imageUrl: String(b.imageUrl || '').slice(0, 400000),
+      imageUrl: await storeImage(b.imageUrl),
       createdAt: new Date()
     };
     await businessesCol.updateOne({ _id: biz._id }, { $push: { posts: { $each: [post], $position: 0 } } });
@@ -1165,7 +1250,7 @@ app.put('/api/my/businesses/:id/photos', requireBizPermission('photos'), async (
     const ownerUser = await usersCol.findOne({ _id: new ObjectId(biz.ownerId) });
     const photoErr = photoLimitError({ photos: b.photos }, effectivePlan(ownerUser), biz);
     if (photoErr) return res.status(403).json({ error: photoErr });
-    const photos = sanitizePhotoArray(b.photos);
+    const photos = await sanitizePhotoArray(b.photos);
     await businessesCol.updateOne({ _id: biz._id }, { $set: { photos } });
     res.json({ ok: true, photos });
   } catch (err) { res.status(500).json({ error: 'Could not save photos.' }); }
