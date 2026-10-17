@@ -8,7 +8,7 @@ const { MongoClient, ObjectId, BSON } = require('mongodb');
 const app = express();
 app.set('trust proxy', 1); // so req.ip is the real visitor on Render
 app.use(express.json({ limit: '25mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), { index: false })); // '/' is served below so the share preview can be filled in
 
 // ---------------- Email notifications ----------------
 // Configure via env vars: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM.
@@ -588,11 +588,50 @@ app.post('/api/admin/migrate-photos', requireAdmin, async (req, res) => {
   }
 });
 
+// ---------------- Link previews (WhatsApp, Facebook, iMessage, etc.) ----------------
+// Those apps do not run the page's JavaScript, so the preview tags are written into the page here.
+function shareMeta(o){
+  const clean = (t, n) => escapeHtml(String(t || '').replace(/\s+/g, ' ').trim().slice(0, n));
+  const title = clean(o.title, 100), desc = clean(o.desc, 200);
+  return (o.titleTag ? `<title>${title}</title>\n` : '') +
+`<meta name="description" content="${desc}">
+<link rel="canonical" href="${escapeHtml(o.url)}">
+<meta property="og:site_name" content="TT Discover">
+<meta property="og:type" content="website">
+<meta property="og:url" content="${escapeHtml(o.url)}">
+<meta property="og:title" content="${title}">
+<meta property="og:description" content="${desc}">
+<meta property="og:image" content="${escapeHtml(o.image)}">
+<meta property="og:image:alt" content="${clean(o.imageAlt || o.title, 120)}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${title}">
+<meta name="twitter:description" content="${desc}">
+<meta name="twitter:image" content="${escapeHtml(o.image)}">`;
+}
+// Only pictures with a real link can be shown in a preview (not old pictures still stored inside the page data).
+function shareImageUrl(base, v){
+  const s = String(v || '');
+  if (/^\/img\/[a-f0-9]{24}$/.test(s)) return base + s;
+  if (/^https:\/\//.test(s) && s.length < 1000) return s;
+  return '';
+}
+
+app.get('/', (req, res) => {
+  const base = siteUrl(req);
+  try {
+    const html = require('fs').readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+    const meta = shareMeta({ title: 'TT Discover', desc: 'Find local businesses, deals, events and jobs in Trinidad and Tobago.', url: base + '/', image: base + '/og-default.png', imageAlt: 'TT Discover' });
+    res.send(html.replace('<!--META-->', meta));
+  } catch (err) {
+    res.status(500).send('Page template missing.');
+  }
+});
+
 app.get('/biz/:id', async (req, res) => {
   if (!businessesCol) return res.status(404).send('Not found');
   let biz;
   try {
-    biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) }, { projection: { name: 1, description: 1, imageUrl: 1 } });
+    biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) }, { projection: { name: 1, description: 1, imageUrl: 1, logoUrl: 1, category: 1, area: 1, tagline: 1, photos: { $slice: 1 } } });
   } catch (err) {
     biz = null;
   }
@@ -601,13 +640,11 @@ app.get('/biz/:id', async (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
   if (!req.query.embed) businessesCol.updateOne({ _id: biz._id }, { $inc: { [`viewsByDay.${today}`]: 1 } }).catch(() => {});
 
-  const title = escapeHtml(biz.name) + ' — TT Discover';
-  const desc = escapeHtml((biz.description || '').slice(0, 160));
-  const meta = `<title>${title}</title>
-<meta name="description" content="${desc}">
-<meta property="og:title" content="${title}">
-<meta property="og:description" content="${desc}">
-<meta property="og:type" content="website">`;
+  const base = siteUrl(req);
+  const where = [biz.category, biz.area].filter(Boolean).join(' in ');
+  const desc = (biz.description || '').trim() || biz.tagline || (where ? where + '. Find it on TT Discover.' : 'See this business on TT Discover.');
+  const image = shareImageUrl(base, biz.imageUrl) || shareImageUrl(base, Array.isArray(biz.photos) && biz.photos[0]) || shareImageUrl(base, biz.logoUrl) || base + '/og-default.png';
+  const meta = shareMeta({ titleTag: true, title: (biz.name || 'Business') + ' — TT Discover', desc, url: base + '/biz/' + req.params.id, image, imageAlt: biz.name });
   try {
     const html = require('fs').readFileSync(path.join(__dirname, 'public', 'biz.html'), 'utf8');
     res.send(html.replace('<!--META-->', meta));
