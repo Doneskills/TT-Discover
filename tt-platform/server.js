@@ -3,7 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
-const { MongoClient, ObjectId } = require('mongodb');
+const { MongoClient, ObjectId, BSON } = require('mongodb');
 
 const app = express();
 app.set('trust proxy', 1); // so req.ip is the real visitor on Render
@@ -211,6 +211,7 @@ let photosCol = null;
 let invitesCol = null;
 let reportsCol = null;
 let imagesCol = null;
+let dbHandle = null;
 
 // ---------------- Weekly hours (Mon-Sun open/close per day) ----------------
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -277,6 +278,7 @@ async function initDb(){
     invitesCol = db.collection('collabInvites');
     reportsCol = db.collection('reports');
     imagesCol = db.collection('images');
+    dbHandle = db;
     imagesCol.createIndex({ hash: 1 }).catch(() => {});
     console.log('Connected to database.');
   } catch (err) {
@@ -472,6 +474,42 @@ app.get('/img/:id', async (req, res) => {
     res.set({ 'Content-Type': doc.type || 'image/jpeg', 'Content-Length': buf.length, 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' });
     res.end(buf);
   } catch (err) { res.status(404).end(); }
+});
+
+// ---------------- Backups (Admin page) ----------------
+// Streams the whole database as a text file, one record per line, so it never has to fit in memory.
+//   part=data   -> everything except the pictures (small)
+//   part=photos -> only the pictures (bigger)
+// Keep these files private: the data file includes accounts and scrambled passwords.
+app.get('/api/admin/backup', requireAdmin, async (req, res) => {
+  if (!dbHandle) return res.status(503).json({ error: 'Database not connected' });
+  const part = req.query.part === 'photos' ? 'photos' : 'data';
+  try {
+    const names = (await dbHandle.listCollections({}, { nameOnly: true }).toArray()).map(c => c.name)
+      .filter(n => !n.startsWith('system.') && (part === 'photos' ? n === 'images' : n !== 'images'));
+    const day = new Date().toISOString().slice(0, 10);
+    res.set({ 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Content-Disposition': `attachment; filename="tt-discover-${part}-${day}.ndjson"`, 'Cache-Control': 'no-store' });
+    let count = 0;
+    for (const name of names){
+      for await (const doc of dbHandle.collection(name).find({})){
+        const line = JSON.stringify({ c: name, d: BSON.EJSON.stringify(doc, { relaxed: false }) }) + '\n';
+        if (!res.write(line)) await new Promise(r => res.once('drain', r));
+        count++;
+      }
+    }
+    res.end();
+    dbHandle.collection('meta').updateOne({ _id: 'backup' }, { $set: { ['last_' + part]: new Date(), ['count_' + part]: count } }, { upsert: true }).catch(() => {});
+  } catch (err) {
+    console.error('Backup failed:', err.message);
+    if (!res.headersSent) res.status(500).json({ error: 'Backup failed.' }); else res.destroy();
+  }
+});
+app.get('/api/admin/backup/status', requireAdmin, async (req, res) => {
+  if (!dbHandle) return res.json({});
+  try {
+    const m = await dbHandle.collection('meta').findOne({ _id: 'backup' });
+    res.json({ data: (m && m.last_data) || null, photos: (m && m.last_photos) || null });
+  } catch (err) { res.json({}); }
 });
 
 // One-time (safe to repeat): moves photos that are still stored inside businesses, users and customer
