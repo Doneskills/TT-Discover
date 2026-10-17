@@ -86,6 +86,11 @@
     <div class="msg" id="bkDataMsg" role="status"></div>
     <button id="bkPhotos" type="button" style="background:#3a2e21;">Download photos backup</button>
     <div class="msg" id="bkPhotosMsg" role="status"></div>
+    <label>Restore from backup files</label>
+    <div class="msg" style="color:#cbbfae;margin-top:0;">Pick the data file, the photos file, or both. Anything in the backup is added back; if a record already exists it is replaced by the backed-up version. Nothing is deleted.</div>
+    <input type="file" id="rsFiles" multiple accept=".ndjson,.txt,.json">
+    <button id="rsBtn" type="button" style="background:#7a2c2c;">Restore from these files</button>
+    <div class="msg" id="rsMsg" role="status"></div>
     <hr>
     <h1 style="font-size:16px;">Existing Listings</h1>
     <div id="bizList"></div>
@@ -320,6 +325,54 @@ async function downloadBackup(part, btn, msg){
 }
 document.getElementById('bkData').addEventListener('click', () => downloadBackup('data', document.getElementById('bkData'), document.getElementById('bkDataMsg')));
 document.getElementById('bkPhotos').addEventListener('click', () => downloadBackup('photos', document.getElementById('bkPhotos'), document.getElementById('bkPhotosMsg')));
+
+async function sendRestoreBatch(lines){
+  for (let attempt = 0; attempt < 3; attempt++){
+    try {
+      const res = await fetch('/api/admin/restore', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword }, body: JSON.stringify({ lines }) });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) return d;
+      if (res.status < 500) throw new Error(d.error || 'Rejected');
+    } catch (e) { if (attempt === 2) throw e; }
+    await new Promise(r => setTimeout(r, 1500));
+  }
+  throw new Error('The site did not answer.');
+}
+document.getElementById('rsBtn').addEventListener('click', async () => {
+  const input = document.getElementById('rsFiles'), btn = document.getElementById('rsBtn'), msg = document.getElementById('rsMsg');
+  const files = Array.from(input.files || []);
+  if (!files.length){ msg.textContent = 'Choose your backup file(s) first.'; return; }
+  if (!(await ttConfirm('Restore from ' + files.length + ' file' + (files.length > 1 ? 's' : '') + '?\n\nRecords in the backup will replace the same records on the live site, so anything changed since the backup is lost for those records. Nothing is deleted.', { title: 'Restore backup', ok: 'Restore', danger: true }))) return;
+  btn.disabled = true;
+  let restored = 0, skipped = 0;
+  try {
+    for (const file of files){
+      const reader = file.stream().getReader(), dec = new TextDecoder();
+      let buf = '', batch = [], size = 0;
+      const flush = async () => {
+        if (!batch.length) return;
+        const d = await sendRestoreBatch(batch);
+        restored += d.restored; skipped += d.skipped; batch = []; size = 0;
+        msg.textContent = 'Restoring ' + file.name + '... ' + restored + ' records so far. Keep this page open.';
+      };
+      const take = async line => { if (!line.trim()) return; batch.push(line); size += line.length; if (batch.length >= 200 || size >= 4000000) await flush(); };
+      for (;;){
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const parts = buf.split('\n'); buf = parts.pop();
+        for (const l of parts) await take(l);
+      }
+      buf += dec.decode();
+      await take(buf);
+      await flush();
+    }
+    msg.textContent = 'Done. Restored ' + restored + ' records' + (skipped ? ' (' + skipped + ' lines could not be read)' : '') + '. Refresh the site to see them.';
+  } catch (e) {
+    msg.textContent = 'Stopped after ' + restored + ' records: ' + (e.message || 'something went wrong') + '. It is safe to run it again.';
+  }
+  btn.disabled = false;
+});
 
 document.getElementById('loginBox').style.display = 'block';
 </script>

@@ -464,6 +464,9 @@ function escapeHtml(s){
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// Tiny page for an outside timer to visit so the free Render plan wakes up and stays awake.
+app.get('/api/health', (req, res) => res.json({ ok: true }));
+
 // Serves a stored picture. The link never changes for a picture, so browsers may keep it for a year.
 app.get('/img/:id', async (req, res) => {
   if (!imagesCol) return res.status(404).end();
@@ -510,6 +513,39 @@ app.get('/api/admin/backup/status', requireAdmin, async (req, res) => {
     const m = await dbHandle.collection('meta').findOne({ _id: 'backup' });
     res.json({ data: (m && m.last_data) || null, photos: (m && m.last_photos) || null });
   } catch (err) { res.json({}); }
+});
+
+// Restore: the Admin page reads a backup file and sends it here in small batches of lines.
+// Records are added or overwritten by their id. Nothing is ever deleted.
+function parseBackupLines(lines){
+  const byColl = {}; let skipped = 0;
+  for (const line of lines){
+    try {
+      const rec = JSON.parse(String(line));
+      if (!rec || typeof rec.c !== 'string' || !/^[A-Za-z0-9_]{1,64}$/.test(rec.c) || typeof rec.d !== 'string') { skipped++; continue; }
+      const doc = BSON.EJSON.parse(rec.d, { relaxed: false });
+      if (!doc || doc._id === undefined || doc._id === null) { skipped++; continue; }
+      (byColl[rec.c] = byColl[rec.c] || []).push({ replaceOne: { filter: { _id: doc._id }, replacement: doc, upsert: true } });
+    } catch (e) { skipped++; }
+  }
+  return { byColl, skipped };
+}
+app.post('/api/admin/restore', requireAdmin, async (req, res) => {
+  if (!dbHandle) return res.status(503).json({ error: 'Database not connected' });
+  const lines = req.body && req.body.lines;
+  if (!Array.isArray(lines) || !lines.length || lines.length > 1000) return res.status(400).json({ error: 'Nothing to restore in this batch.' });
+  try {
+    const { byColl, skipped } = parseBackupLines(lines);
+    let restored = 0;
+    for (const name of Object.keys(byColl)){
+      await dbHandle.collection(name).bulkWrite(byColl[name], { ordered: false });
+      restored += byColl[name].length;
+    }
+    res.json({ ok: true, restored, skipped });
+  } catch (err) {
+    console.error('Restore failed:', err.message);
+    res.status(500).json({ error: 'Could not restore this batch: ' + err.message });
+  }
 });
 
 // One-time (safe to repeat): moves photos that are still stored inside businesses, users and customer
