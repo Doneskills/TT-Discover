@@ -43,35 +43,77 @@ function parseFrom(str){
   return { name: 'TT Discover', email: String(str).trim() };
 }
 
-async function sendMail(to, subject, html, replyTo){
+// Plain-text copy of an email (mail programs and spam filters like emails that have one).
+function htmlToText(html){
+  return String(html || '')
+    .replace(/<(style|script)[\s\S]*?<\/\1>/gi, '')
+    .replace(/<a\s[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (m, href, label) => {
+      const t = label.replace(/<[^>]+>/g, '').trim();
+      return t && t !== href ? `${t} (${href})` : href;
+    })
+    .replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|h[1-6]|li|tr)>/gi, '\n\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&')
+    .replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// opts: { headers: {name: value}, attachments: [{ name, content (base64) }] }
+async function sendMail(to, subject, html, replyTo, opts){
+  opts = opts || {};
   if (!mailEnabled){
     const links = (String(html).match(/href="([^"]+)"/g) || []).map(h => h.slice(6, -1));
     console.log(`[email not sent — email not set up] To: ${to} | Subject: ${subject}${links.length ? ' | Link: ' + links.join(' ') : ''}`);
     return;
   }
+  const text = htmlToText(html);
   try {
     if (BREVO_API_KEY){
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 15000);
+      const timer = setTimeout(() => ctrl.abort(), 20000);
       try {
-        const r = await fetch('https://api.brevo.com/v3/smtp/email', {
+        const send = withHeaders => fetch('https://api.brevo.com/v3/smtp/email', {
           method: 'POST',
           headers: { 'api-key': BREVO_API_KEY, 'content-type': 'application/json', accept: 'application/json' },
-          body: JSON.stringify({ sender: parseFrom(MAIL_FROM), to: [{ email: to }], subject, htmlContent: html, ...(replyTo ? { replyTo: { email: replyTo } } : {}) }),
+          body: JSON.stringify({
+            sender: parseFrom(MAIL_FROM), to: [{ email: to }], subject, htmlContent: html, textContent: text,
+            ...(replyTo ? { replyTo: { email: replyTo } } : {}),
+            ...(withHeaders && opts.headers ? { headers: opts.headers } : {}),
+            ...(opts.attachments ? { attachment: opts.attachments } : {})
+          }),
           signal: ctrl.signal
         });
+        let r = await send(true);
+        if (r.status === 400 && opts.headers) r = await send(false);   // if Brevo refuses the extra headers, still send the email
         if (!r.ok){
           const detail = await r.text().catch(() => '');
           throw new Error(`Brevo said ${r.status}: ${detail.slice(0, 300)}`);
         }
       } finally { clearTimeout(timer); }
     } else {
-      await mailTransporter.sendMail({ from: MAIL_FROM, to, subject, html, ...(replyTo ? { replyTo } : {}) });
+      await mailTransporter.sendMail({
+        from: MAIL_FROM, to, subject, html, text,
+        ...(replyTo ? { replyTo } : {}),
+        ...(opts.headers ? { headers: opts.headers } : {}),
+        ...(opts.attachments ? { attachments: opts.attachments.map(a => ({ filename: a.name, content: Buffer.from(a.content, 'base64') })) } : {})
+      });
     }
   } catch (err) {
     console.error(`Email to ${to} failed:`, err.message);
   }
 }
+
+// ---------------- Unsubscribe links for area update emails ----------------
+// A link in each update email lets a customer stop them without logging in. The link is signed so it cannot be guessed.
+const MAIL_SECRET = process.env.MAIL_SECRET || crypto.createHash('sha256').update('mail:' + (process.env.ADMIN_PASSWORD || '') + (process.env.MONGODB_URI || '')).digest('hex');
+const unsubToken = userId => crypto.createHmac('sha256', MAIL_SECRET).update('unsub:' + String(userId)).digest('hex').slice(0, 32);
+function validUnsub(u, t){
+  try {
+    const a = Buffer.from(unsubToken(u)), b = Buffer.from(String(t || ''));
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  } catch (e) { return false; }
+}
+const publicBase = () => String(process.env.SITE_URL || '').replace(/\/+$/, '');
+const bizLink = id => publicBase() ? `<p><a href="${publicBase()}/biz/${id}">See it on TT Discover</a></p>` : '';
 
 // Notifies every customer account whose chosen area matches, one email each.
 // A failed send for one customer never blocks the others.
@@ -79,7 +121,16 @@ async function notifyAreaCustomers(area, subject, buildHtml){
   if (!usersCol || !area) return;
   try {
     const customers = await usersCol.find({ accountType: 'customer', preferredArea: area }).toArray();
-    await Promise.all(customers.map(c => sendMail(c.email, subject, buildHtml(c))));
+    const base = publicBase();
+    await Promise.all(customers.map(c => {
+      let html = buildHtml(c), opts;
+      if (base){
+        const link = `${base}/unsubscribe?u=${c._id.toString()}&t=${unsubToken(c._id.toString())}`;
+        html += `<p style="font-size:12px;color:#777;margin-top:24px;">You get this because you asked TT Discover for updates about ${escapeHtml(area)}. <a href="${link}">Stop these emails</a></p>`;
+        opts = { headers: { 'List-Unsubscribe': `<${link}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } };
+      }
+      return sendMail(c.email, subject, html, undefined, opts);
+    }));
   } catch (err) {
     console.error('notifyAreaCustomers failed:', err.message);
   }
@@ -513,6 +564,60 @@ app.get('/api/admin/backup/status', requireAdmin, async (req, res) => {
     const m = await dbHandle.collection('meta').findOne({ _id: 'backup' });
     res.json({ data: (m && m.last_data) || null, photos: (m && m.last_photos) || null });
   } catch (err) { res.json({}); }
+});
+
+// Unsubscribe from area update emails. The page only shows a button (so mail scanners that open links
+// cannot unsubscribe people by accident); the POST does the work and is also what mail apps' one-tap unsubscribe uses.
+app.get('/unsubscribe', (req, res) => {
+  const u = String(req.query.u || ''), t = String(req.query.t || '');
+  const ok = validUnsub(u, t);
+  res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Stop emails — TT Discover</title></head>
+<body style="font-family:Segoe UI,Arial,sans-serif;background:#fdf6ec;color:#2a2a2a;margin:0;"><div style="max-width:420px;margin:60px auto;padding:0 20px;text-align:center;">
+${ok ? `<h2>Stop update emails?</h2><p>You will no longer get emails about new businesses and deals in your area.</p>
+<form method="POST" action="/unsubscribe?u=${escapeHtml(u)}&t=${escapeHtml(t)}"><button type="submit" style="padding:12px 28px;border:none;border-radius:24px;background:#e0562f;color:#fff;font-size:15px;font-weight:700;cursor:pointer;">Yes, stop the emails</button></form>`
+: `<h2>This link is not valid</h2><p>You can change your update emails any time in Settings.</p>`}
+<p style="margin-top:28px;"><a href="/" style="color:#e0562f;">Back to TT Discover</a></p></div></body></html>`);
+});
+app.post('/unsubscribe', async (req, res) => {
+  const u = String(req.query.u || ''), t = String(req.query.t || '');
+  if (!validUnsub(u, t) || !usersCol) return res.status(400).send('This link is not valid.');
+  try {
+    await usersCol.updateOne({ _id: new ObjectId(u) }, { $set: { preferredArea: '' } });
+    res.send('<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Done — TT Discover</title></head><body style="font-family:Segoe UI,Arial,sans-serif;background:#fdf6ec;color:#2a2a2a;margin:0;"><div style="max-width:420px;margin:60px auto;padding:0 20px;text-align:center;"><h2>You are unsubscribed</h2><p>You will not get update emails any more. You can turn them back on any time in Settings.</p><p><a href="/" style="color:#e0562f;">Back to TT Discover</a></p></div></body></html>');
+  } catch (err) { res.status(400).send('This link is not valid.'); }
+});
+
+// Weekly backup by email. An outside timer (for example cron-job.org) visits this once a week with the secret key
+// in a header called x-cron-key. Sends the data backup (not the pictures) to ADMIN_EMAIL as a text file.
+app.get('/api/cron/backup-email', async (req, res) => {
+  const key = process.env.CRON_KEY || '';
+  const given = String(req.headers['x-cron-key'] || '');
+  const keyOk = key.length >= 16 && given.length === key.length && crypto.timingSafeEqual(Buffer.from(given), Buffer.from(key));
+  if (!keyOk) return res.status(401).json({ error: 'Not allowed' });
+  if (!dbHandle || !process.env.ADMIN_EMAIL) return res.status(503).json({ error: 'Database or ADMIN_EMAIL not set' });
+  try {
+    const names = (await dbHandle.listCollections({}, { nameOnly: true }).toArray()).map(c => c.name).filter(n => !n.startsWith('system.') && n !== 'images');
+    const chunks = []; let count = 0;
+    for (const name of names){
+      for await (const doc of dbHandle.collection(name).find({})){
+        chunks.push(JSON.stringify({ c: name, d: BSON.EJSON.stringify(doc, { relaxed: false }) }) + '\n'); count++;
+      }
+    }
+    const gz = Buffer.from(chunks.join(''), 'utf8');
+    const day = new Date().toISOString().slice(0, 10);
+    const tooBig = gz.length > 10 * 1024 * 1024;
+    await sendMail(process.env.ADMIN_EMAIL, `TT Discover weekly backup ${day}`,
+      tooBig
+        ? `<p>This week's backup is too large to email (${Math.round(gz.length / 1048576)} MB). Please download it from the Admin page instead.</p>`
+        : `<p>Your weekly TT Discover data backup is attached (${count} records, ${Math.round(gz.length / 1024)} KB).</p><p>It does not include pictures. To restore, open the Admin page, tap the Restore button and choose this file. Keep it private: it includes accounts.</p>`,
+      undefined,
+      tooBig ? undefined : { attachments: [{ name: `tt-discover-data-${day}.ndjson.txt`, content: gz.toString('base64') }] });
+    dbHandle.collection('meta').updateOne({ _id: 'backup' }, { $set: { last_email: new Date() } }, { upsert: true }).catch(() => {});
+    res.json({ ok: true, records: count, kb: Math.round(gz.length / 1024), emailed: !tooBig });
+  } catch (err) {
+    console.error('Backup email failed:', err.message);
+    res.status(500).json({ error: 'Backup email failed.' });
+  }
 });
 
 // Restore: the Admin page reads a backup file and sends it here in small batches of lines.
@@ -1140,18 +1245,20 @@ app.post('/api/my/businesses', requireUser, requireVerified, requireBusinessAcco
     notifyAreaCustomers(
       doc.area,
       `New business added in ${doc.area}: ${doc.name}`,
-      () => `<p>A new business just joined TT Discover in <b>${doc.area}</b>:</p>
-             <h3>${doc.name}</h3>
-             <p>${doc.description || ''}</p>
-             <p>Category: ${doc.category}</p>`
+      () => `<p>A new business just joined TT Discover in <b>${escapeHtml(doc.area)}</b>:</p>
+             <h3>${escapeHtml(doc.name)}</h3>
+             <p>${escapeHtml(doc.description || '')}</p>
+             <p>Category: ${escapeHtml(doc.category)}</p>
+             ${bizLink(result.insertedId)}`
     );
     if (doc.deals.length){
       notifyAreaCustomers(
         doc.area,
         `New deal at ${doc.name}: ${doc.deals[0].title}`,
-        () => `<p><b>${doc.name}</b> in ${doc.area} just posted a new deal:</p>
-               <h3>${doc.deals[0].title}</h3>
-               <p>${doc.deals[0].description || ''}</p>`
+        () => `<p><b>${escapeHtml(doc.name)}</b> in ${escapeHtml(doc.area)} just posted a new deal:</p>
+               <h3>${escapeHtml(doc.deals[0].title)}</h3>
+               <p>${escapeHtml(doc.deals[0].description || '')}</p>
+               ${bizLink(result.insertedId)}`
       );
     }
   } catch (err) {
@@ -1400,9 +1507,10 @@ app.post('/api/my/businesses/:id/deals', requireBizPermission('deals'), async (r
     notifyAreaCustomers(
       biz.area,
       `New deal at ${biz.name}: ${deal.title}`,
-      () => `<p><b>${biz.name}</b> in ${biz.area} just posted a new deal:</p>
-             <h3>${deal.title}</h3>
-             <p>${deal.description || ''}</p>`
+      () => `<p><b>${escapeHtml(biz.name)}</b> in ${escapeHtml(biz.area)} just posted a new deal:</p>
+             <h3>${escapeHtml(deal.title)}</h3>
+             <p>${escapeHtml(deal.description || '')}</p>
+             ${bizLink(biz._id)}`
     );
   } catch (err) {
     res.status(500).json({ error: 'Could not post deal.' });
