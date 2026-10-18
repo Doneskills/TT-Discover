@@ -72,21 +72,6 @@
     padding: 12px 16px; font-size: 14px; cursor: pointer; font-family: inherit;
   }
   .acctMenuItem:hover, .acctMenuItem:focus-visible { background: #343434; outline: none; }
-  #aboutModal {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
-    display: none; align-items: center; justify-content: center; z-index: 60; padding: 16px;
-  }
-  #aboutModal.open { display: flex; }
-  #aboutPanel {
-    background: var(--card-bg); color: var(--text); border-radius: 14px; padding: 24px 20px; max-width: 420px;
-    width: 100%; max-height: 85vh; overflow-y: auto; position: relative; text-align: left;
-  }
-  #aboutClose {
-    position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; border-radius: 50%;
-    border: none; background: #f0e4d0; color: var(--text); font-size: 16px; cursor: pointer;
-  }
-  #aboutPanel h2 { font-size: 19px; margin-bottom: 10px; padding-right: 30px; }
-  #aboutPanel p { font-size: 14px; line-height: 1.6; margin-bottom: 10px; color: var(--text-muted); }
   header h1 { font-size: 26px; letter-spacing: 0.5px; }
   header p { margin-top: 6px; font-size: 14px; opacity: 0.95; }
   .searchWrap { max-width: 480px; margin: 18px auto 0; padding: 0 12px; }
@@ -264,15 +249,6 @@
 </div>
 
 
-<div id="aboutModal">
-  <div id="aboutPanel">
-    <button id="aboutClose" aria-label="Close">✕</button>
-    <h2>About TT Discover</h2>
-    <p>TT Discover is a home-grown platform for finding local businesses, services, deals, and events all across Trinidad &amp; Tobago.</p>
-    <p>Our goal is simple: help people discover what's good nearby, and give small businesses easy tools to reach more customers and grow their online presence — without needing a big budget or technical know-how.</p>
-    <p>Whether you're browsing for your next meal, following updates on new spots opening near you, or listing your own business, TT Discover is built for the local community, by the local community.</p>
-  </div>
-</div>
 
 
 <div style="text-align:center;font-size:12px;opacity:.7;padding:18px 0 28px;"><a href="/about.html" style="color:inherit;">About</a> · <a href="/terms.html" style="color:inherit;">Terms</a> · <a href="/privacy.html" style="color:inherit;">Privacy</a> · <a href="/contact.html" style="color:inherit;">Contact us</a></div>
@@ -356,16 +332,10 @@ document.addEventListener('click', (e) => { if (!acctMenu.contains(e.target)) ac
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') acctMenu.classList.remove('open'); });
 document.getElementById('menuProfile').addEventListener('click', () => { window.location.href = '/profile.html'; });
 document.getElementById('menuSettings').addEventListener('click', () => { window.location.href = '/settings.html'; });
-document.getElementById('menuAbout').addEventListener('click', () => {
-  acctMenu.classList.remove('open');
-  document.getElementById('aboutModal').classList.add('open');
-});
+document.getElementById('menuAbout').addEventListener('click', () => { window.location.href = '/about.html'; });
 document.getElementById('menuLogout').addEventListener('click', () => {
   localStorage.removeItem('ttp_token');
   window.location.reload();
-});
-document.getElementById('aboutClose').addEventListener('click', () => {
-  document.getElementById('aboutModal').classList.remove('open');
 });
 
 const DAY_LABELS_LIST = [
