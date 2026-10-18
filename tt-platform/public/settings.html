@@ -134,6 +134,38 @@
   .designCard.on { border-color: #e0562f; }
   .designCard .sw { width: 44px; height: 44px; border-radius: 8px; flex-shrink: 0; }
   .viewLink { display: inline-block; margin-top: 10px; font-size: 13px; color: #e0562f; text-decoration: none; font-weight: 600; }
+
+  .toolHead { font-size: 18px; font-weight: 600; margin: 30px 0 4px; padding-top: 22px; border-top: 1px solid var(--border); }
+  .toolCard .toolSw { display: flex; align-items: center; justify-content: center; font-size: 22px; background: var(--active); }
+  .planTag { font-size: 11px; font-weight: 700; background: #e0562f; color: #fff; border-radius: 10px; padding: 2px 8px; margin-left: 4px; white-space: nowrap; }
+  .toolCard.locked { opacity: .85; }
+  #toolOverlay { position: fixed; inset: 0; z-index: 9000; background: var(--bg); color: var(--text); display: none; flex-direction: column; }
+  #toolOverlay.open { display: flex; }
+  .toolBar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--card); padding-top: max(10px, env(safe-area-inset-top)); }
+  .toolBar b { font-size: 17px; }
+  .toolBar button { margin: 0; }
+  .toolSave { display: flex; align-items: center; gap: 10px; }
+  .toolWrap { flex: 1; min-height: 0; display: none; grid-template-columns: minmax(0, 1fr) 340px; }
+  .toolWrap.show { display: grid; }
+  .toolMain { min-width: 0; min-height: 0; position: relative; background: var(--active); }
+  .toolMain iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
+  .toolMain.scroll { overflow-y: auto; padding: 16px; }
+  .toolSide { min-height: 0; overflow-y: auto; border-left: 1px solid var(--border); padding: 4px 16px 40px; background: var(--card); -webkit-overflow-scrolling: touch; }
+  .toolSide h4 { font-size: 15px; margin: 18px 0 2px; }
+  .toolSide label { margin: 12px 0 5px; }
+  .toolSide .bdBar { margin-top: 12px; }
+  .toolSide .bdEdit { position: static; margin-top: 14px; }
+  .toolLock { display: none; flex: 1; align-items: center; justify-content: center; text-align: center; padding: 30px 20px; line-height: 1.7; font-size: 15px; }
+  .toolLock.show { display: flex; flex-direction: column; gap: 12px; }
+  .fontChips { display: grid; gap: 8px; }
+  .fontChip { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--bg); color: var(--text); border: 2px solid var(--input-border); font-weight: 400; font-size: 15px; }
+  .fontChip.on { border-color: #e0562f; }
+  .fontChip .fcA { font-size: 26px; line-height: 1; width: 44px; text-align: center; flex-shrink: 0; }
+  .fontChip small { display: block; font-size: 12px; color: var(--muted); }
+  @media (max-width: 860px) {
+    .toolWrap.show { grid-template-columns: 1fr; grid-template-rows: 52% minmax(0, 1fr); }
+    .toolSide { border-left: none; border-top: 1px solid var(--border); }
+  }
   .savebar { margin-top: 28px; display: flex; align-items: center; gap: 14px; }
   .msg { font-size: 13px; color: #e0562f; }
   @media (max-width: 760px) {
@@ -238,24 +270,9 @@
       <div id="brandMount" style="margin-top:16px;"></div>
       <p style="margin-top:14px;"><a class="viewLink" id="viewItLink" href="#" target="_blank" rel="noopener">View it ↗</a></p>
       <div class="hint">Opens your live page. Save first to see changes.</div>
-    </div>
-
-    <div class="panel wide" data-field="builder">
-      <div class="hint" id="bdLock" style="display:none;margin:0 0 12px;"></div>
-      <div id="bdWrap" style="display:none;">
-        <p class="hint" style="margin:0 0 12px;">Build your page block by block. Tap a block below to add it, tap one on the page to change it, and use the arrows (or drag) to move it. Save to publish.</p>
-        <div class="bdBar" id="bdBar"></div>
-        <div class="bdGrid"><div class="cbCanvas" id="bdCanvas"></div><div class="bdEdit" id="bdEdit"></div></div>
-      </div>
-      <input type="file" id="bdPhotoInput" accept="image/*" style="display:none;">
-    </div>
-
-    <div class="panel" data-field="textfonts">
-      <div class="hint" id="tfLock" style="display:none;margin:0 0 12px;">🔒 Changing the text and fonts on your page is part of Basic and Pro. <a href="#" id="tfUpgrade">See plans</a></div>
-      <p class="hint" style="margin:0 0 12px;">Rename the headings, tabs and button on your page and pick your fonts. Leave a box empty to keep your design's own wording. Save to see it on your page.</p>
-      <label for="tf-heading">Heading font</label><select id="tf-heading"></select>
-      <label for="tf-body">Text font</label><select id="tf-body"></select>
-      <div id="tfLabels"></div>
+      <h3 class="toolHead">Make it yours</h3>
+      <p class="hint" style="margin:0 0 12px;">Change the words and fonts on your page, or build a page of your own.</p>
+      <div id="toolCards"></div>
     </div>
 
     <div class="panel" data-field="facebook"><label for="f-facebook">Facebook</label><input type="url" id="f-facebook" placeholder="https://facebook.com/..."></div>
@@ -336,6 +353,37 @@
   </main>
 </div>
 
+<div id="toolOverlay" role="dialog" aria-modal="true" aria-labelledby="toolTitle">
+  <div class="toolBar">
+    <button type="button" class="ghost" id="toolClose">← Back</button>
+    <b id="toolTitle"></b>
+    <span class="toolSave"><span class="msg" id="toolMsg" role="status"></span><button type="button" class="primary" id="toolSaveBtn">Save</button></span>
+  </div>
+
+  <div class="toolWrap" id="tfWrap">
+    <div class="toolMain"><iframe id="tfFrame" title="Preview of your business page"></iframe></div>
+    <div class="toolSide">
+      <p class="hint" style="margin:14px 0 0;">Tap a font or change a word and the page on the left changes with it. Leave a box empty to keep your design's own wording. Press Save to put it on your page.</p>
+      <h4>Fonts</h4>
+      <label>Heading font</label><div class="fontChips" id="tf-heading-chips"></div><select id="tf-heading" style="display:none" aria-hidden="true" tabindex="-1"></select>
+      <label>Text font</label><div class="fontChips" id="tf-body-chips"></div><select id="tf-body" style="display:none" aria-hidden="true" tabindex="-1"></select>
+      <h4 style="margin-top:26px;">Words on your page</h4>
+      <div id="tfLabels"></div>
+    </div>
+  </div>
+
+  <div class="toolLock" id="bdLock"></div>
+  <div class="toolWrap" id="bdWrap">
+    <div class="toolMain scroll"><div class="cbCanvas" id="bdCanvas"></div></div>
+    <div class="toolSide">
+      <p class="hint" style="margin:14px 0 0;">Tap a block to add it. Tap a block on the page to change it, and use the arrows (or drag) to move it. Press Save to publish.</p>
+      <div class="bdBar" id="bdBar"></div>
+      <div class="bdEdit" id="bdEdit"></div>
+    </div>
+  </div>
+  <input type="file" id="bdPhotoInput" accept="image/*" style="display:none;">
+</div>
+
 <script src="/areas.js"></script>
 <script src="/ui.js"></script>
 <script src="/customize.js"></script>
@@ -367,8 +415,6 @@ const SECTIONS = [
   { id: 'location', label: 'Location', title: 'Location', subs: [['address','Address'],['hours','Hours'],['contact','Phone & Email']] },
   { id: 'social', label: 'Social Media Links', title: 'Social Media Links', subs: [['facebook','Facebook'],['instagram','Instagram'],['website','Website'],['tiktok','TikTok'],['youtube','YouTube'],['whatsapp','WhatsApp'],['x','X']] },
   { id: 'designs', label: 'Business Designs', title: 'Business Designs', subs: [['designs','Business Designs']] },
-  { id: 'textfonts', label: 'Text & Fonts', title: 'Text & Fonts', subs: [['textfonts','Text & Fonts']] },
-  { id: 'builder', label: 'Page Builder', title: 'Page Builder', subs: [['builder','Page Builder']] },
   { sep: true },
   { id: 'collab', label: 'Collaborators', title: 'Collaborators', ownerOnly: true, noSave: true, subs: [['collab','Collaborators']], load: () => renderCollab() },
   { id: 'staff', label: 'Staff', title: 'Staff', ownerOnly: true, noSave: true, subs: [['staff','Staff']], load: () => renderStaff() },
@@ -417,7 +463,7 @@ function selectBiz(id){
   };
   bdSel = null;
   hoursTouched = false;
-  $('viewPage').href = '/biz/' + biz._id; $('viewItLink').href = '/biz/' + biz._id; paintDesigns();
+  $('viewPage').href = '/biz/' + biz._id; $('viewItLink').href = '/biz/' + biz._id; paintDesigns(); paintToolCards();
   brandPicker.set(biz.brandColor || ''); brandPicker.designChanged(); paintTextFonts(true); paintBuilder();
   $('f-tagline').value = biz.tagline || '';
   $('f-name').value = biz.name || ''; $('f-category').value = biz.category || '';
@@ -439,11 +485,7 @@ function selectBiz(id){
 const DESIGNS = [{ id: 'food', name: 'Food', blurb: 'Blue sidebar with Menu, Highlights, Reviews and Photos pages. Great for restaurants, bakeries and food trucks.', swatch: '#23659b' }, { id: 'fabric', name: 'Clothing and fabric', blurb: 'Warm brown and cream with a big bold name, a photo collage and a gallery. Great for boutiques, tailors and fabric shops.', swatch: '#2a1810' }, { id: 'beauty', name: 'Beauty', blurb: 'Soft rose and cream with an elegant name, a big hero photo and a Services price list. Great for salons, barbers, nail techs, spas and makeup artists.', swatch: '#7a3b4b' }, { id: 'build', name: 'Construction', blurb: 'Bold charcoal and safety yellow with a hero banner, a Services list, a Projects gallery and a one-tap Call button. Great for builders, plumbers, electricians and contractors.', swatch: '#f5b000' }, { id: 'bar', name: 'Bar and nightlife', blurb: 'Dark with neon glow, a bold drinks menu and a Reserve button. Great for bars, lounges, clubs and late-night food.', swatch: '#d81b86' }, { id: 'learn', name: 'Classes and tutoring', blurb: 'Bright and friendly with a Classes list and an Enrol button. Great for tutors, music and dance lessons and training centres.', swatch: '#1d5fd1' }, { id: 'farm', name: 'Farm and market', blurb: "Earthy greens and warm tones with a What's fresh list. Great for farms, markets, produce sellers and bakers.", swatch: '#2f5d34' }, { id: 'office', name: 'Professional services', blurb: 'Calm navy and gold with a Services list and a Book a consultation button. Great for lawyers, clinics, accountants and offices.', swatch: '#14284b' }, { id: 'custom', pro: true, name: 'Start blank', blurb: 'An empty white page you build yourself with the Page Builder: headings, text, photos and buttons, arranged your way.', swatch: '#ffffff' }];
 const brandPicker = ttBrandPicker({
   mount: document.getElementById('brandMount'),
-  getDraft: () => (readTextFonts(), { ...biz, labels: state.labels, fonts: state.fonts, layout: state.layout,
-    name: $('f-name').value, category: $('f-category').value, description: $('f-description').value, address: $('f-address').value,
-    phone: $('f-phone').value, email: $('f-email').value, template: state.template,
-    imageUrl: state.imageUrl, photos: state.photos, menuPhotos: state.menu, highlights: state.highlights, logoUrl: state.logoUrl,
-    menuItems: state.menuItems, tagline: $('f-tagline').value }),
+  getDraft: () => previewDraft(),
   getSwatch: () => (DESIGNS.find(d => d.id === state.template) || DESIGNS[0]).swatch
 });
 // ---- Text & Fonts (Basic and Pro) ----
@@ -456,18 +498,97 @@ function readTextFonts(){
   if ($('tf-heading').value) state.fonts.heading = $('tf-heading').value;
   if ($('tf-body').value) state.fonts.body = $('tf-body').value;
 }
+function previewDraft(){
+  readTextFonts();
+  return { ...biz, labels: state.labels, fonts: state.fonts, layout: state.layout,
+    name: $('f-name').value, category: $('f-category').value, description: $('f-description').value, address: $('f-address').value,
+    phone: $('f-phone').value, email: $('f-email').value, template: state.template,
+    imageUrl: state.imageUrl, photos: state.photos, menuPhotos: state.menu, highlights: state.highlights, logoUrl: state.logoUrl,
+    menuItems: state.menuItems, tagline: $('f-tagline').value };
+}
+function paintChips(boxId, selId, opts){
+  const cur = $(selId).value;
+  $(boxId).innerHTML = opts.map(([k, n]) => {
+    const nm = n.split(':')[0], desc = n.includes(':') ? n.slice(n.indexOf(':') + 1).trim() : '';
+    const stack = k && TT_FONT_STACKS[k] ? ` style="font-family:${TT_FONT_STACKS[k]}"` : '';
+    return `<button type="button" class="fontChip${k === cur ? ' on' : ''}" data-k="${k}" aria-pressed="${k === cur}"${stack}><span class="fcA">Aa</span><span>${esc(nm)}${desc ? `<small>${esc(desc)}</small>` : ''}</span></button>`;
+  }).join('');
+}
 function paintTextFonts(fresh){
   if (!fresh) readTextFonts();
-  const paid = (biz.ownerPlan || me.plan) !== 'free';
-  $('tfLock').style.display = paid ? 'none' : 'block';
-  const fill = (sel, opts, cur) => { sel.innerHTML = opts.map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join(''); sel.value = cur || ''; sel.disabled = !paid; };
+  const fill = (sel, opts, cur) => { sel.innerHTML = opts.map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join(''); sel.value = cur || ''; };
   fill($('tf-heading'), TT_HEADING_FONTS, state.fonts.heading); fill($('tf-body'), TT_BODY_FONTS, state.fonts.body);
+  paintChips('tf-heading-chips', 'tf-heading', TT_HEADING_FONTS); paintChips('tf-body-chips', 'tf-body', TT_BODY_FONTS);
   const def = ttLabelDefaults(state.template);
-  $('tfLabels').innerHTML = ttLabelKeys(state.template).map(([k, d]) => `<label for="tl-${k}">${esc(d)}</label><input type="text" id="tl-${k}" maxlength="30" placeholder="${esc(def[k])}" value="${esc(state.labels[k] || '')}"${paid ? '' : ' disabled'}>`).join('');
+  $('tfLabels').innerHTML = ttLabelKeys(state.template).map(([k, d]) => `<label for="tl-${k}">${esc(d)}</label><input type="text" id="tl-${k}" maxlength="30" placeholder="${esc(def[k])}" value="${esc(state.labels[k] || '')}">`).join('');
 }
-$('tfUpgrade').addEventListener('click', e => { e.preventDefault(); window.ttOpenPremium(); });
-document.querySelectorAll('.extraUpgrade').forEach(a => a.addEventListener('click', e => { e.preventDefault(); window.ttOpenPremium(); }));
+// Sends the words and fonts to the preview as you change them.
+let tfTimer = null;
+function tfPreviewNow(){
+  readTextFonts();
+  try { $('tfFrame').contentWindow.postMessage({ ttText: { labels: state.labels, fonts: state.fonts } }, location.origin); } catch (e) {}
+}
+function tfPreviewSoon(){ clearTimeout(tfTimer); tfTimer = setTimeout(tfPreviewNow, 200); }
+[['tf-heading-chips', 'tf-heading'], ['tf-body-chips', 'tf-body']].forEach(([box, sel]) => $(box).addEventListener('click', e => {
+  const b = e.target.closest('.fontChip'); if (!b) return;
+  $(sel).value = b.dataset.k;
+  paintChips(box, sel, sel === 'tf-heading' ? TT_HEADING_FONTS : TT_BODY_FONTS);
+  tfPreviewNow();
+}));
+$('tfLabels').addEventListener('input', tfPreviewSoon);
+$('tfFrame').addEventListener('load', tfPreviewNow);
 
+// ---- The two tools under Business Designs: Text & Fonts (Basic and Pro), Page Builder (Pro) ----
+function paintToolCards(){
+  const plan = biz.ownerPlan || me.plan;
+  const tools = [
+    ['textfonts', '🔤', 'Text & Fonts', 'Change the headings, tab names, button words and fonts on your page, with a live preview.', 'Basic+', plan !== 'free'],
+    ['builder', '🧱', 'Page Builder', 'Start from a blank page and add, move and edit headings, text, photos and buttons.', 'Pro', plan === 'pro']
+  ];
+  $('toolCards').innerHTML = tools.map(([id, ic, name, blurb, tag, ok]) => `<button type="button" class="designCard toolCard${ok ? '' : ' locked'}" data-tool="${id}"><span class="sw toolSw">${ic}</span><span><b>${name}</b> <span class="planTag">${ok ? '⭐' : '🔒'} ${tag}</span><br><span style="font-size:12px;color:var(--muted)">${blurb}</span></span></button>`).join('');
+  document.querySelectorAll('.toolCard').forEach((b, i) => b.addEventListener('click', () => {
+    if (!tools[i][5]){ window.ttOpenPremium(); return; }
+    openTool(tools[i][0]);
+  }));
+}
+let toolOpen = '', toolFocus = null, fontsLoaded = false;
+function openTool(id){
+  toolOpen = id; toolFocus = document.activeElement;
+  if (!fontsLoaded){
+    fontsLoaded = true;
+    const l = document.createElement('link'); l.rel = 'stylesheet';
+    l.href = 'https://fonts.googleapis.com/css2?family=Oswald:wght@400;500&family=Poppins:wght@400;500;600;700&family=Great+Vibes&family=Playfair+Display:wght@500;700&family=Bebas+Neue&family=Merriweather:wght@400;700&display=swap';
+    document.head.appendChild(l);
+  }
+  $('toolTitle').textContent = id === 'textfonts' ? 'Text & Fonts' : 'Page Builder';
+  $('toolMsg').textContent = '';
+  $('tfWrap').classList.remove('show'); $('bdWrap').classList.remove('show'); $('bdLock').classList.remove('show');
+  $('toolOverlay').classList.add('open'); document.body.style.overflow = 'hidden';
+  if (id === 'textfonts'){
+    paintTextFonts();
+    $('tfWrap').classList.add('show');
+    const d = Object.assign({}, previewDraft(), { brandColor: brandPicker.get() });
+    d.name = d.name || 'Your business name'; d.reviews = d.reviews || [];
+    try { localStorage.setItem('ttp_preview_draft', JSON.stringify(d)); }
+    catch (e) { d.imageUrl = ''; d.photos = []; d.menuPhotos = []; d.highlights = []; d.logoUrl = ''; try { localStorage.setItem('ttp_preview_draft', JSON.stringify(d)); } catch (e2) {} }
+    $('tfFrame').src = '/biz.html?preview=1&embed=1&t=' + Date.now();
+  } else paintBuilder();
+  $('toolClose').focus();
+}
+function closeTool(){
+  if (!toolOpen) return;
+  if (toolOpen === 'textfonts'){ readTextFonts(); $('tfFrame').src = 'about:blank'; }
+  toolOpen = '';
+  $('toolOverlay').classList.remove('open'); document.body.style.overflow = '';
+  brandPicker.designChanged(); paintDesigns(); paintToolCards();
+  if (toolFocus && toolFocus.focus) try { toolFocus.focus(); } catch (e) {}
+}
+$('toolClose').addEventListener('click', closeTool);
+$('toolSaveBtn').addEventListener('click', () => { $('toolMsg').textContent = 'Saving...'; $('saveBtn').click(); });
+new MutationObserver(() => { $('toolMsg').textContent = $('msg').textContent; }).observe($('msg'), { childList: true, characterData: true, subtree: true });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && toolOpen && !document.querySelector('.ttModalBack') && !(document.getElementById('premiumPopup') || { classList: { contains: () => false } }).classList.contains('open')) closeTool();
+});
 
 // ---- Page Builder (Pro "Start blank" pages) ----
 let bdSel = null, bdDrag = null;
@@ -477,17 +598,17 @@ function paintBuilder(){
   const lock = $('bdLock'), wrap = $('bdWrap');
   if (!bdPro()){
     lock.innerHTML = '🔒 The Page Builder is part of Pro. <a href="#" id="bdUp">See plans</a>';
-    lock.style.display = 'block'; wrap.style.display = 'none';
+    lock.classList.add('show'); wrap.classList.remove('show');
     $('bdUp').addEventListener('click', e => { e.preventDefault(); window.ttOpenPremium(); });
     return;
   }
   if (state.template !== 'custom'){
-    lock.innerHTML = 'To build your own page, pick the <b>Start blank</b> design in Business Designs. Your current page stays as it is until you save. <button type="button" class="small" id="bdUse" style="padding:8px 12px;font-size:13px;border-radius:16px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;">Use a blank page</button>';
-    lock.style.display = 'block'; wrap.style.display = 'none';
+    lock.innerHTML = '<div>The Page Builder works on a blank page. Your current page stays as it is until you save.</div><button type="button" class="primary" id="bdUse">Start a blank page</button>';
+    lock.classList.add('show'); wrap.classList.remove('show');
     $('bdUse').addEventListener('click', () => { state.template = 'custom'; paintDesigns(); brandPicker.designChanged(); paintTextFonts(); paintBuilder(); });
     return;
   }
-  lock.style.display = 'none'; wrap.style.display = 'block';
+  lock.classList.remove('show'); wrap.classList.add('show');
   $('bdBar').innerHTML = TT_BLOCK_TYPES.map(([t, n, ic]) => `<button type="button" data-add="${t}">${ic} ${n}</button>`).join('');
   paintCanvas(); paintBlockEditor();
 }

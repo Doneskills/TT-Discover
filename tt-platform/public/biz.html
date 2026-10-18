@@ -900,7 +900,19 @@ window.addEventListener('message', e => {
   if (e.origin !== location.origin || !previewMode || !biz) return;
   const d = e.data || {};
   if (typeof d.ttBrand === 'string'){ biz.brandColor = d.ttBrand; applyBrand(d.ttBrand); }
+  // The Text & Fonts editor sends the words and fonts being tried so its preview changes live.
+  if (d.ttText && typeof d.ttText === 'object'){
+    const y = window.scrollY;
+    biz.labels = d.ttText.labels && typeof d.ttText.labels === 'object' ? d.ttText.labels : {};
+    biz.fonts = d.ttText.fonts && typeof d.ttText.fonts === 'object' ? d.ttText.fonts : {};
+    applyFonts(biz.fonts); render(); window.scrollTo(0, y);
+  }
 });
+// Inside the editor's preview, links that would leave the page do nothing, so owners cannot get lost.
+if (embed && previewMode) document.addEventListener('click', e => {
+  const a = e.target.closest && e.target.closest('a');
+  if (a && (a.getAttribute('href') || '').charAt(0) !== '#') e.preventDefault();
+}, true);
 
 (async function init(){
   if (previewMode){
