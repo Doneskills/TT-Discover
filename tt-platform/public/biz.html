@@ -33,6 +33,14 @@
   body:not(.ready) .shell, body:not(.ready) #previewBar { display: none; }
   body:not(.ready)::before { content: 'Loading...'; display: block; padding: 60px 20px; text-align: center; color: #8a8a8a; font-family: var(--body); }
 
+  body[data-template="custom"] .shell { grid-template-columns: minmax(0, 1fr); }
+  body[data-template="custom"] .side { display: none; }
+  body[data-template="custom"] main { width: 100%; max-width: 820px; margin: 0 auto; padding: 0 20px 80px; }
+  .cpTop { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 0 14px; margin-bottom: 18px; border-bottom: 1px solid var(--divider); }
+  .cpBrand { display: flex; align-items: center; gap: 10px; font-size: 15px; min-width: 0; }
+  .cpBrand img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }
+  .cpTop a, .cpTop button { font-size: 13px; color: var(--muted); background: none; border: none; cursor: pointer; text-decoration: none; padding: 4px 6px; font-family: inherit; }
+  .cpEmpty { text-align: center; color: var(--muted); padding: 60px 0; }
   .embed body { min-height: 0; }
   .embed .shell { min-height: 0; }
   .embed .side { position: static; height: auto; }
@@ -372,7 +380,7 @@
 <script src="/lightbox.js"></script>
 <script>
 const $ = id => document.getElementById(id);
-const esc = s => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
+const esc = s => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;'); };   // also safe inside quoted attributes
 const embed = new URLSearchParams(location.search).get('embed') === '1';
 if (embed) document.documentElement.classList.add('embed');
 const embedMinH = Number(new URLSearchParams(location.search).get('minh')) || 0;
@@ -474,8 +482,25 @@ function sendHeight(){
   window.parent.postMessage({ ttEmbedHeight: Math.ceil(document.querySelector('.shell').getBoundingClientRect().height) }, location.origin);
 }
 let firstRender = true;
+function renderCustom(){
+  const m = $('main');
+  const blocks = (biz.layout && biz.layout.blocks) || [];
+  document.documentElement.classList.remove('fabric');
+  m.innerHTML = `<div class="cpTop"><span class="cpBrand">${biz.logoUrl ? `<img src="${esc(biz.logoUrl)}" alt="">` : ''}<b>${esc(biz.name)}</b></span><span><a href="/">TT Discover</a><button type="button" id="cpTheme" aria-label="Switch light or dark mode">🌙</button></span></div>`
+    + (blocks.length ? window.ttBlocksHtml(blocks, { editing: previewMode }) : '<p class="cpEmpty">This page is still being built.</p>')
+    + reportRowHtml();
+  $('cpTheme').addEventListener('click', () => $('themeBtn').click());
+  m.querySelectorAll('.cb-p img').forEach(i => i.addEventListener('click', () => {
+    if (embed && window.parent !== window){ window.parent.postMessage({ ttOpenPhoto: i.src }, location.origin); return; }
+    window.ttLightbox.open(i.src);
+  }));
+  window.scrollTo(0, 0);
+  if (embed) sendHeight();
+  firstRender = false;
+}
 function render(){
   paintShell();
+  if (biz.template === 'custom'){ renderCustom(); return; }
   const p = route();
   if ((p === 'posts' || p === 'jobs') && !tabSeen.has(p)){ tabSeen.add(p); track(p + 'Tab'); }
   const m = $('main');

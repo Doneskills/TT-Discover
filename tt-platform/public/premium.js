@@ -17,7 +17,7 @@ const PP_PLANS = {
   },
   pro: {
     name: 'Pro', tag: 'Make your business your own.', cta: 'Start Pro — free for 1 month', fine: 'Then TT$150/month.',
-    feat: ['Everything in Basic, plus:', 'head:Page customisation', 'Drag-and-drop sections: reorder About, Gallery, Products, Staff, Jobs, Reviews and Contact', 'Premium layouts and your own custom sections', 'head:Photos', '100+ photos, sorted into categories like Products, Projects, Events and Team', 'head:Team', 'Collaborators stay free, with no cap on helpers', 'Roles (Manager, Staff, Viewer) and permissions for editing, posts, photos, jobs and analytics', 'head:Analytics and hiring', 'Views over time, top posts, top jobs and visitor trends', 'More post allowance and hiring tools', 'head:Visibility', 'Priority search placement and enhanced featured placement']
+    feat: ['Everything in Basic, plus:', 'head:Page customisation', 'Page Builder: start from a blank page and add, edit and move headings, text, photos and buttons', 'head:Photos', '100+ photos, sorted into categories like Products, Projects, Events and Team', 'head:Team', 'Collaborators stay free, with no cap on helpers', 'Roles (Manager, Staff, Viewer) and permissions for editing, posts, photos, jobs and analytics', 'head:Analytics and hiring', 'Views over time, top posts, top jobs and visitor trends', 'More post allowance and hiring tools', 'head:Visibility', 'Priority search placement and enhanced featured placement']
   }
 };
 let ppSelected = 'basic';

@@ -147,7 +147,7 @@ async function storeImage(value){
   const s = String(value || '').trim();
   if (!s) return '';
   if (/^\/img\/[a-f0-9]{24}$/.test(s)) return s;           // already stored
-  if (!s.startsWith('data:')) return s.slice(0, 2000);       // an ordinary link: keep as is
+  if (!s.startsWith('data:')) return /^https?:\/\/[^\s"'<>`]{1,1900}$/i.test(s) ? s : '';   // an ordinary web link is kept; anything else is dropped
   const m = IMG_DATA_RE.exec(s);
   if (!m || !imagesCol) return '';
   const buf = Buffer.from(m[2], 'base64');
@@ -713,8 +713,14 @@ app.post('/api/admin/restore', requireAdmin, async (req, res) => {
 app.post('/api/admin/migrate-photos', requireAdmin, async (req, res) => {
   if (!imagesCol || !businessesCol || !usersCol || !photosCol) return res.status(503).json({ error: 'Database not connected' });
   const stats = { converted: 0, failed: 0, businesses: 0, users: 0, customerPhotos: 0 };
+  stats.cleaned = 0;
   const conv = async v => {
-    if (!isDataImage(v)) return v;
+    if (typeof v !== 'string') return v;
+    if (!isDataImage(v)){
+      const safe = await storeImage(v);              // keeps /img/ ids and plain web links, removes anything else
+      if (safe !== v){ stats.cleaned++; return safe; }
+      return v;
+    }
     const r = await storeImage(v);
     if (r){ stats.converted++; return r; }
     stats.failed++; return v;   // could not be read: leave it exactly as it was
@@ -722,14 +728,17 @@ app.post('/api/admin/migrate-photos', requireAdmin, async (req, res) => {
   try {
     for await (const biz of businessesCol.find({})){
       const set = {};
-      for (const k of ['imageUrl', 'logoUrl']) if (isDataImage(biz[k])) set[k] = await conv(biz[k]);
+      for (const k of ['imageUrl', 'logoUrl']) if (typeof biz[k] === 'string' && biz[k]){ const v = await conv(biz[k]); if (v !== biz[k]) set[k] = v; }
       for (const k of ['photos', 'menuPhotos', 'highlights']){
-        if (Array.isArray(biz[k]) && biz[k].some(isDataImage)){
-          const arr = []; for (const u of biz[k]) arr.push(await conv(u)); set[k] = arr;
+        if (Array.isArray(biz[k]) && biz[k].length){
+          const arr = []; for (const u of biz[k]) arr.push(await conv(u));
+          if (arr.some((v, i) => v !== biz[k][i])) set[k] = arr.filter(Boolean);
         }
       }
-      if (Array.isArray(biz.posts) && biz.posts.some(p => p && isDataImage(p.imageUrl))){
-        const posts = []; for (const p of biz.posts) posts.push(p && isDataImage(p.imageUrl) ? { ...p, imageUrl: await conv(p.imageUrl) } : p); set.posts = posts;
+      if (Array.isArray(biz.posts) && biz.posts.some(p => p && typeof p.imageUrl === 'string' && p.imageUrl)){
+        const posts = []; let changed = false;
+        for (const p of biz.posts){ if (p && typeof p.imageUrl === 'string' && p.imageUrl){ const v = await conv(p.imageUrl); if (v !== p.imageUrl){ changed = true; posts.push({ ...p, imageUrl: v }); continue; } } posts.push(p); }
+        if (changed) set.posts = posts;
       }
       if (Object.keys(set).length){ await businessesCol.updateOne({ _id: biz._id }, { $set: set }); stats.businesses++; }
     }
@@ -1175,6 +1184,42 @@ function publicBiz(biz){
   return out;
 }
 
+// ---------------- Page Builder layout (Pro "Start blank" pages) ----------------
+const BLOCK_TYPES = ['heading', 'text', 'photo', 'button', 'divider', 'spacer'];
+const BLOCK_LIMIT = 40;
+function cleanButtonUrl(raw){
+  const v = String(raw || '').trim().slice(0, 300);
+  if (!v) return '';
+  if (/^(mailto:|tel:)[^\s"'<>`]+$/i.test(v)) return v;
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return 'mailto:' + v;
+  if (/^\+?[\d\s().-]{7,20}$/.test(v)) return 'tel:' + v.replace(/[^\d+]/g, '');
+  return cleanSocialValue('website', v);
+}
+async function sanitizeLayout(layout){
+  const out = { blocks: [] };
+  const arr = layout && Array.isArray(layout.blocks) ? layout.blocks.slice(0, BLOCK_LIMIT) : [];
+  const pick = (v, list, d) => list.includes(v) ? v : d;
+  const line = (v, n) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, n);
+  const seen = new Set();
+  for (const raw of arr){
+    if (!raw || !BLOCK_TYPES.includes(raw.type)) continue;
+    let id = String(raw.id || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 20);
+    if (!id || seen.has(id)) id = crypto.randomBytes(6).toString('hex');
+    seen.add(id);
+    const type = raw.type, align = pick(raw.align, ['left', 'center', 'right'], 'left');
+    if (type === 'heading') out.blocks.push({ id, type, text: line(raw.text, 120), size: pick(raw.size, ['s', 'm', 'l'], 'm'), align });
+    else if (type === 'text') out.blocks.push({ id, type, text: String(raw.text || '').replace(/\r/g, '').slice(0, 2000).trimEnd(), align });
+    else if (type === 'photo'){
+      const url = await storeImage(raw.url);
+      out.blocks.push({ id, type, url: /^\/img\/[a-f0-9]{24}$/.test(url) || /^https:\/\//.test(url) ? url : '', caption: line(raw.caption, 120), width: pick(raw.width, ['s', 'm', 'full'], 'full'), align: pick(raw.align, ['left', 'center', 'right'], 'center') });
+    }
+    else if (type === 'button') out.blocks.push({ id, type, label: line(raw.label, 40), url: cleanButtonUrl(raw.url), style: pick(raw.style, ['filled', 'outline'], 'filled'), align });
+    else if (type === 'divider') out.blocks.push({ id, type });
+    else if (type === 'spacer') out.blocks.push({ id, type, size: pick(raw.size, ['s', 'm', 'l'], 'm') });
+  }
+  return out;
+}
+
 // ---------------- Self-service business listings (signed-in owners) ----------------
 app.get('/api/my/businesses', requireUser, async (req, res) => {
   if (!businessesCol) return res.json([]);
@@ -1245,7 +1290,7 @@ app.delete('/api/businesses/:id/photos/:photoId', requireUser, async (req, res) 
   } catch (err) { res.status(400).json({ error: 'Could not remove photo.' }); }
 });
 
-const TEMPLATES = ['food', 'fabric', 'beauty', 'build', 'bar', 'learn', 'farm', 'office'];
+const TEMPLATES = ['food', 'fabric', 'beauty', 'build', 'bar', 'learn', 'farm', 'office', 'custom'];
 // Text and fonts a Basic or Pro business may change. Keep in step with public/customize.js.
 const LABEL_KEYS = ['home', 'menu', 'photos', 'reviews', 'about', 'posts', 'jobs', 'description', 'feat', 'pricelist', 'cta', 'rate'];
 const FONT_KEYS_HEAD = ['oswald', 'playfair', 'bebas', 'merriweather', 'poppins', 'vibes'];
@@ -1266,6 +1311,7 @@ function sanitizeFonts(obj){
 // Designs only Premium businesses can pick. A page that already uses one keeps it if the plan ends.
 const PREMIUM_TEMPLATES = [];   // every design is free
 function templateAllowed(template, ownerUser, existingTemplate){
+  if (template === 'custom' && template !== existingTemplate) return effectivePlan(ownerUser) === 'pro';   // "Start blank" page builder is Pro
   return !PREMIUM_TEMPLATES.includes(template) || template === existingTemplate || effectivePlan(ownerUser) !== 'free';
 }
 app.post('/api/my/businesses', requireUser, requireVerified, requireBusinessAccount, async (req, res) => {
@@ -1376,7 +1422,7 @@ app.put('/api/my/businesses/:id', requireUser, requireBusinessAccount, async (re
     if (Array.isArray(b.highlights)) update.highlights = await sanitizePhotoArray(b.highlights);
     if (typeof b.hiring === 'boolean') update.hiring = b.hiring;
     if (TEMPLATES.includes(b.template)){
-      if (!templateAllowed(b.template, ownerUser, biz.template)) return res.status(403).json({ error: 'That design is for Basic and Pro businesses. Pick one of the free designs, or upgrade.' });
+      if (!templateAllowed(b.template, ownerUser, biz.template)) return res.status(403).json({ error: 'That design needs a different plan. Pick another design, or upgrade.' });
       update.template = b.template;
     }
     if (typeof b.brandColor === 'string') update.brandColor = sanitizeColor(b.brandColor);
@@ -1397,6 +1443,13 @@ app.put('/api/my/businesses/:id', requireUser, requireBusinessAccount, async (re
       })).filter(i => i.name);
     }
     if (b.about) update.about = sanitizeAbout(b.about);
+    if (b.layout !== undefined){
+      const layout = await sanitizeLayout(b.layout);
+      if (JSON.stringify(layout) !== JSON.stringify(biz.layout || { blocks: [] }) && effectivePlan(ownerUser) !== 'pro'){
+        return res.status(403).json({ error: 'The Page Builder is for Pro businesses. Upgrade to use it.' });
+      }
+      update.layout = layout;
+    }
     if (b.social){
       const so = sanitizeSocial(b.social);
       if (effectivePlan(ownerUser) === 'free' && EXTRA_SOCIAL.some(k => (so[k] || '') !== ((biz.social || {})[k] || ''))){
