@@ -214,6 +214,14 @@
       <div class="hint">Opens your live page. Save first to see changes.</div>
     </div>
 
+    <div class="panel" data-field="textfonts">
+      <div class="hint" id="tfLock" style="display:none;margin:0 0 12px;">🔒 Changing the text and fonts on your page is part of Basic and Pro. <a href="#" id="tfUpgrade">See plans</a></div>
+      <p class="hint" style="margin:0 0 12px;">Rename the headings, tabs and button on your page and pick your fonts. Leave a box empty to keep your design's own wording. Save to see it on your page.</p>
+      <label for="tf-heading">Heading font</label><select id="tf-heading"></select>
+      <label for="tf-body">Text font</label><select id="tf-body"></select>
+      <div id="tfLabels"></div>
+    </div>
+
     <div class="panel" data-field="facebook"><label for="f-facebook">Facebook</label><input type="url" id="f-facebook" placeholder="https://facebook.com/..."></div>
     <div class="panel" data-field="instagram"><label for="f-instagram">Instagram</label><input type="url" id="f-instagram" placeholder="https://instagram.com/..."></div>
     <div class="panel" data-field="website"><label for="f-website">Website</label><input type="url" id="f-website" placeholder="https://..."></div>
@@ -290,6 +298,7 @@
 
 <script src="/areas.js"></script>
 <script src="/ui.js"></script>
+<script src="/customize.js"></script>
 <script src="/brandpicker.js"></script>
 <script>
 const token = localStorage.getItem('ttp_token') || '';
@@ -318,6 +327,7 @@ const SECTIONS = [
   { id: 'location', label: 'Location', title: 'Location', subs: [['address','Address'],['hours','Hours'],['contact','Phone & Email']] },
   { id: 'social', label: 'Social Media Links', title: 'Social Media Links', subs: [['facebook','Facebook'],['instagram','Instagram'],['website','Website']] },
   { id: 'designs', label: 'Business Designs', title: 'Business Designs', subs: [['designs','Business Designs']] },
+  { id: 'textfonts', label: 'Text & Fonts', title: 'Text & Fonts', subs: [['textfonts','Text & Fonts']] },
   { sep: true },
   { id: 'collab', label: 'Collaborators', title: 'Collaborators', ownerOnly: true, noSave: true, subs: [['collab','Collaborators']], load: () => renderCollab() },
   { id: 'staff', label: 'Staff', title: 'Staff', ownerOnly: true, noSave: true, subs: [['staff','Staff']], load: () => renderStaff() },
@@ -329,7 +339,7 @@ const SECTIONS = [
   { id: 'delete', label: 'Delete Business', title: 'Delete Business', ownerOnly: true, noSave: true, danger: true, subs: [['delete','Delete Business']] }
 ];
 
-let me, list = [], biz = null, state = {}, activeSection = 'name', activeSub = 'name', hoursTouched = false, photoTarget = null;
+let me, list = [], biz = null, state = { labels: {}, fonts: {} }, activeSection = 'name', activeSub = 'name', hoursTouched = false, photoTarget = null;
 
 async function init(){
   const res = await fetch('/api/me', { headers: { 'x-auth-token': token } });
@@ -360,11 +370,12 @@ function selectBiz(id){
   state = {
     imageUrl: biz.imageUrl || '', photos: [...(biz.photos || [])], menu: [...(biz.menuPhotos || [])], highlights: [...(biz.highlights || [])],
     template: biz.template || 'food', hiring: !!biz.hiring, logoUrl: biz.logoUrl || '',
-    menuItems: (biz.menuItems || []).map(i => ({ ...i })), highlightNames: [...(biz.highlightNames || [])]
+    menuItems: (biz.menuItems || []).map(i => ({ ...i })), highlightNames: [...(biz.highlightNames || [])],
+    labels: { ...(biz.labels || {}) }, fonts: { ...(biz.fonts || {}) }
   };
   hoursTouched = false;
   $('viewPage').href = '/biz/' + biz._id; $('viewItLink').href = '/biz/' + biz._id; paintDesigns();
-  brandPicker.set(biz.brandColor || ''); brandPicker.designChanged();
+  brandPicker.set(biz.brandColor || ''); brandPicker.designChanged(); paintTextFonts(true);
   $('f-tagline').value = biz.tagline || '';
   $('f-name').value = biz.name || ''; $('f-category').value = biz.category || '';
   $('f-description').value = biz.description || '';
@@ -379,22 +390,43 @@ function selectBiz(id){
   $('msg').textContent = '';
 }
 
-const DESIGNS = [{ id: 'food', name: 'Food', blurb: 'Blue sidebar with Menu, Highlights, Reviews and Photos pages. Great for restaurants, bakeries and food trucks.', swatch: '#23659b' }, { id: 'fabric', name: 'Clothing and fabric', blurb: 'Warm brown and cream with a big bold name, a photo collage and a gallery. Great for boutiques, tailors and fabric shops.', swatch: '#2a1810' }, { id: 'beauty', name: 'Beauty', blurb: 'Soft rose and cream with an elegant name, a big hero photo and a Services price list. Great for salons, barbers, nail techs, spas and makeup artists.', swatch: '#7a3b4b' }, { id: 'build', name: 'Construction', blurb: 'Bold charcoal and safety yellow with a hero banner, a Services list, a Projects gallery and a one-tap Call button. Great for builders, plumbers, electricians and contractors.', swatch: '#f5b000' }, { id: 'bar', name: 'Bar and nightlife', premium: true, blurb: 'Dark with neon glow, a bold drinks menu and a Reserve button. Great for bars, lounges, clubs and late-night food.', swatch: '#d81b86' }, { id: 'learn', name: 'Classes and tutoring', premium: true, blurb: 'Bright and friendly with a Classes list and an Enrol button. Great for tutors, music and dance lessons and training centres.', swatch: '#1d5fd1' }, { id: 'farm', name: 'Farm and market', premium: true, blurb: "Earthy greens and warm tones with a What's fresh list. Great for farms, markets, produce sellers and bakers.", swatch: '#2f5d34' }, { id: 'office', name: 'Professional services', premium: true, blurb: 'Calm navy and gold with a Services list and a Book a consultation button. Great for lawyers, clinics, accountants and offices.', swatch: '#14284b' }];
+const DESIGNS = [{ id: 'food', name: 'Food', blurb: 'Blue sidebar with Menu, Highlights, Reviews and Photos pages. Great for restaurants, bakeries and food trucks.', swatch: '#23659b' }, { id: 'fabric', name: 'Clothing and fabric', blurb: 'Warm brown and cream with a big bold name, a photo collage and a gallery. Great for boutiques, tailors and fabric shops.', swatch: '#2a1810' }, { id: 'beauty', name: 'Beauty', blurb: 'Soft rose and cream with an elegant name, a big hero photo and a Services price list. Great for salons, barbers, nail techs, spas and makeup artists.', swatch: '#7a3b4b' }, { id: 'build', name: 'Construction', blurb: 'Bold charcoal and safety yellow with a hero banner, a Services list, a Projects gallery and a one-tap Call button. Great for builders, plumbers, electricians and contractors.', swatch: '#f5b000' }, { id: 'bar', name: 'Bar and nightlife', blurb: 'Dark with neon glow, a bold drinks menu and a Reserve button. Great for bars, lounges, clubs and late-night food.', swatch: '#d81b86' }, { id: 'learn', name: 'Classes and tutoring', blurb: 'Bright and friendly with a Classes list and an Enrol button. Great for tutors, music and dance lessons and training centres.', swatch: '#1d5fd1' }, { id: 'farm', name: 'Farm and market', blurb: "Earthy greens and warm tones with a What's fresh list. Great for farms, markets, produce sellers and bakers.", swatch: '#2f5d34' }, { id: 'office', name: 'Professional services', blurb: 'Calm navy and gold with a Services list and a Book a consultation button. Great for lawyers, clinics, accountants and offices.', swatch: '#14284b' }];
 const brandPicker = ttBrandPicker({
   mount: document.getElementById('brandMount'),
-  getDraft: () => ({ ...biz,
+  getDraft: () => (readTextFonts(), { ...biz, labels: state.labels, fonts: state.fonts,
     name: $('f-name').value, category: $('f-category').value, description: $('f-description').value, address: $('f-address').value,
     phone: $('f-phone').value, email: $('f-email').value, template: state.template,
     imageUrl: state.imageUrl, photos: state.photos, menuPhotos: state.menu, highlights: state.highlights, logoUrl: state.logoUrl,
     menuItems: state.menuItems, tagline: $('f-tagline').value }),
   getSwatch: () => (DESIGNS.find(d => d.id === state.template) || DESIGNS[0]).swatch
 });
+// ---- Text & Fonts (Basic and Pro) ----
+function readTextFonts(){
+  if (!document.querySelector('#tfLabels input')) return;
+  const labels = {};
+  document.querySelectorAll('#tfLabels input').forEach(i => { const v = i.value.replace(/\s+/g, ' ').trim(); if (v) labels[i.id.slice(3)] = v; });
+  state.labels = labels;
+  state.fonts = {};
+  if ($('tf-heading').value) state.fonts.heading = $('tf-heading').value;
+  if ($('tf-body').value) state.fonts.body = $('tf-body').value;
+}
+function paintTextFonts(fresh){
+  if (!fresh) readTextFonts();
+  const paid = (biz.ownerPlan || me.plan) !== 'free';
+  $('tfLock').style.display = paid ? 'none' : 'block';
+  const fill = (sel, opts, cur) => { sel.innerHTML = opts.map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join(''); sel.value = cur || ''; sel.disabled = !paid; };
+  fill($('tf-heading'), TT_HEADING_FONTS, state.fonts.heading); fill($('tf-body'), TT_BODY_FONTS, state.fonts.body);
+  const def = ttLabelDefaults(state.template);
+  $('tfLabels').innerHTML = ttLabelKeys(state.template).map(([k, d]) => `<label for="tl-${k}">${esc(d)}</label><input type="text" id="tl-${k}" maxlength="30" placeholder="${esc(def[k])}" value="${esc(state.labels[k] || '')}"${paid ? '' : ' disabled'}>`).join('');
+}
+$('tfUpgrade').addEventListener('click', e => { e.preventDefault(); window.ttOpenPremium(); });
+
 function paintDesigns(){
   $('designCards').innerHTML = DESIGNS.map(d => `<button type="button" class="designCard${d.id === state.template ? ' on' : ''}" data-id="${d.id}" aria-pressed="${d.id === state.template}"><span class="sw" style="background:${d.swatch}"></span><span><b>${d.name}</b>${d.id === state.template ? ' ✓' : ''}${d.premium ? ` <span style="font-size:11px;font-weight:700;background:#e0562f;color:#fff;border-radius:10px;padding:2px 8px;margin-left:4px;">${['basic', 'pro'].includes(me.plan) || d.id === state.template ? '⭐ Basic+' : '🔒 Basic+'}</span>` : ''}<br><span style="font-size:12px;color:var(--muted)">${d.blurb}</span></span></button>`).join('');
   document.querySelectorAll('.designCard').forEach(b => b.addEventListener('click', () => {
     const d = DESIGNS.find(x => x.id === b.dataset.id);
     if (d.premium && !['basic', 'pro'].includes(me.plan) && d.id !== state.template){ window.ttOpenPremium(); return; }
-    state.template = b.dataset.id; paintDesigns(); brandPicker.designChanged();
+    state.template = b.dataset.id; paintDesigns(); brandPicker.designChanged(); paintTextFonts();
   }));
 }
 function paintHeader(){
@@ -557,6 +589,7 @@ async function put(body){
 
 $('saveBtn').addEventListener('click', async () => {
   $('msg').textContent = 'Saving...';
+  readTextFonts();
   const about = {}; ABOUT.forEach(([k]) => about[k] = $('a-' + k).value);
   const social = {}; ['facebook','instagram','website'].forEach(k => social[k] = $('f-' + k).value);
   const body = {
@@ -564,7 +597,8 @@ $('saveBtn').addEventListener('click', async () => {
     address: $('f-address').value, area: $('f-area').value, phone: $('f-phone').value, email: $('f-email').value,
     imageUrl: state.imageUrl, photos: state.photos, menuPhotos: state.menu, highlights: state.highlights, about, social,
     template: state.template, brandColor: brandPicker.get(), tagline: $('f-tagline').value, logoUrl: state.logoUrl, highlightNames: state.highlightNames.slice(0, state.highlights.length),
-    menuItems: state.menuItems.filter(i => i.name.trim())
+    menuItems: state.menuItems.filter(i => i.name.trim()),
+    labels: state.labels, fonts: state.fonts
   };
   if (!body.name.trim()){ $('msg').textContent = 'Business name is required.'; return; }
   if (hoursTouched) body.hours = readHours();

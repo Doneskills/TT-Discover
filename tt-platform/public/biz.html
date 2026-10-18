@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!--META-->
+<script src="/customize.js"></script>
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
 <script>try { if (localStorage.getItem('tt_theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -383,23 +384,18 @@ let biz = null, me = null, sortMode = 'relevant', query = '', pickRating = 0;
 const DAYS = ['sun','mon','tue','wed','thu','fri','sat'];
 // Business pages show the owner's gallery photos. The business photo (imageUrl) is only for the home page card.
 // Designs that use the hero + services layout, with their own page names and button text.
-const SV = {
-  beauty: { menu: 'Services', photos: 'Gallery', cta: 'Call to book', feat: 'Favourites', none: 'No services listed yet.' },
-  build: { menu: 'Services', photos: 'Projects', cta: 'Call for a quote', feat: 'Featured work', none: 'No services listed yet.' },
-  bar: { menu: 'Drinks & menu', photos: 'Gallery', cta: 'Call to reserve', feat: 'House favourites', none: 'No menu items listed yet.' },
-  learn: { menu: 'Classes', photos: 'Gallery', cta: 'Call to enrol', feat: 'Popular classes', none: 'No classes listed yet.' },
-  farm: { menu: "What's fresh", photos: 'Gallery', cta: 'Call to order', feat: 'In season', none: 'Nothing listed yet.' },
-  office: { menu: 'Services', photos: 'Our work', cta: 'Book a consultation', feat: 'Featured', none: 'No services listed yet.' }
-};
+const SV = window.TT_SV;
+// A page name, heading or button: the business's own wording if they set one, otherwise the design's.
+const L = key => ((biz && biz.labels && biz.labels[key]) || window.ttLabelDefaults(biz && biz.template)[key]);
 const isSv = t => !!SV[t];
 function pages(){
   const t = biz && biz.template;
-  const l = t === 'fabric' ? [['home','Home'],['photos','Photos'],['reviews','Reviews']]
-    : isSv(t) ? [['home','Home'],['menu',SV[t].menu],['photos',SV[t].photos],['reviews','Reviews']]
-    : [['home','Home'],['menu','Menu'],['reviews','Reviews'],['photos','Photos']];
-  if (biz && aboutFilled()) l.splice(1, 0, ['about','About']);
-  if (biz && (biz.posts || []).length) l.push(['posts','Posts']);
-  if (biz && ((biz.jobs || []).length || biz.hiring)) l.push(['jobs','Jobs']);
+  const l = t === 'fabric' ? [['home',L('home')],['photos',L('photos')],['reviews',L('reviews')]]
+    : isSv(t) ? [['home',L('home')],['menu',L('menu')],['photos',L('photos')],['reviews',L('reviews')]]
+    : [['home',L('home')],['menu',L('menu')],['reviews',L('reviews')],['photos',L('photos')]];
+  if (biz && aboutFilled()) l.splice(1, 0, ['about',L('about')]);
+  if (biz && (biz.posts || []).length) l.push(['posts',L('posts')]);
+  if (biz && ((biz.jobs || []).length || biz.hiring)) l.push(['jobs',L('jobs')]);
   return l;
 }
 
@@ -459,7 +455,7 @@ function paintShell(){
   $('sideName').textContent = biz.name;
   $('sideBig').textContent = biz.tagline || 'Menu';
   const cur = route();
-  $('nav').innerHTML = pages().map(([k, l]) => `<a href="#${k}" class="${k === cur ? 'active' : ''}" ${k === cur ? 'aria-current="page"' : ''}>${l}</a>`).join('');
+  $('nav').innerHTML = pages().map(([k, l]) => `<a href="#${k}" class="${k === cur ? 'active' : ''}" ${k === cur ? 'aria-current="page"' : ''}>${esc(l)}</a>`).join('');
 }
 
 function sendHeight(){
@@ -537,7 +533,7 @@ function homeService(){
   const now = new Date();
   const deals = (biz.deals || []).filter(d => !d.endDate || new Date(d.endDate) >= now);
   const soc = biz.social || {};
-  const call = biz.phone ? `<a class="svBtn" href="tel:${esc(biz.phone)}">📞 ${SV[biz.template].cta}</a>` : '';
+  const call = biz.phone ? `<a class="svBtn" href="tel:${esc(biz.phone)}">📞 ${esc(L('cta'))}</a>` : '';
   const mail = biz.email ? `<a class="svBtn ghost" href="mailto:${esc(biz.email)}">✉ Email</a>` : '';
   return `<div class="svHero${hero ? '' : ' noimg'}"${hero ? ` style="background-image:url('${hero.replace(/'/g, '%27')}')"` : ''}>
       <div class="svHeroIn">
@@ -576,7 +572,7 @@ function homeHtml(){
     <hr class="rule">
     ${pics.length ? tiles(pics) : '<p class="empty">No photos yet.</p>'}
     <hr class="rule" style="margin-top:22px">
-    <h2 class="sec">Description</h2>
+    <h2 class="sec">${esc(L('description'))}</h2>
     <p class="desc">${esc(biz.description) || '<span class="empty">No description yet.</span>'}</p>
     ${deals.map(d => `<div class="deal"><b>🔥 ${esc(d.title)}</b><br>${esc(d.description)}</div>`).join('')}
     <div class="chips">${['facebook','instagram','website'].filter(k => soc[k]).map(k => `<a class="chip" href="${esc(soc[k])}" target="_blank" rel="noopener">${k[0].toUpperCase() + k.slice(1)}</a>`).join('')}</div>
@@ -590,21 +586,21 @@ const ABOUT_LABELS = { accessibility: 'Accessibility', serviceOptions: 'Service 
 function aboutFilled(){ const a = (biz && biz.about) || {}; return Object.keys(ABOUT_LABELS).some(k => a[k]); }
 function aboutPageHtml(){
   const a = biz.about || {};
-  return `<h2 class="sec">About</h2><hr class="rule" style="margin-top:0">` + Object.keys(ABOUT_LABELS).filter(k => a[k]).map(k => `<div class="aboutRow"><b>${ABOUT_LABELS[k]}:</b> ${esc(a[k])}</div>`).join('');
+  return `<h2 class="sec">${esc(L('about'))}</h2><hr class="rule" style="margin-top:0">` + Object.keys(ABOUT_LABELS).filter(k => a[k]).map(k => `<div class="aboutRow"><b>${ABOUT_LABELS[k]}:</b> ${esc(a[k])}</div>`).join('');
 }
 function aboutHtml(){
   const a = biz.about || {};
   const rows = Object.keys(ABOUT_LABELS).filter(k => a[k]).map(k => `<div class="aboutRow"><b>${ABOUT_LABELS[k]}:</b> ${esc(a[k])}</div>`).join('');
-  return rows ? `<h2 class="sec" style="margin-top:22px">About</h2>${rows}` : '';
+  return rows ? `<h2 class="sec" style="margin-top:22px">${esc(L('about'))}</h2>${rows}` : '';
 }
 function postsHtml(){
-  return `<h2 class="sec">Posts</h2><hr class="rule" style="margin-top:0">` + (biz.posts || []).map(p => `
+  return `<h2 class="sec">${esc(L('posts'))}</h2><hr class="rule" style="margin-top:0">` + (biz.posts || []).map(p => `
     <div class="post"><b>${esc(p.title)}</b><div class="pd">${new Date(p.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
       ${p.content ? `<p class="desc">${esc(p.content)}</p>` : ''}${p.imageUrl ? `<img src="${p.imageUrl}" alt="">` : ''}</div>`).join('');
 }
 function jobsHtml(){
-  if (!(biz.jobs || []).length) return `<h2 class="sec">Jobs</h2><hr class="rule" style="margin-top:0"><p class="desc">We are hiring! No openings are listed yet. Get in touch to ask about work with us.</p><div class="contact">${biz.email ? `<a class="pill" href="mailto:${esc(biz.email)}"><span class="ic">✉</span>${esc(biz.email)}</a>` : ''}${biz.phone ? `<a class="pill" href="tel:${esc(biz.phone)}"><span class="ic">📞</span>${esc(biz.phone)}</a>` : ''}</div>`;
-  return `<h2 class="sec">Jobs</h2><hr class="rule" style="margin-top:0">` + (biz.jobs || []).map(j => `
+  if (!(biz.jobs || []).length) return `<h2 class="sec">${esc(L('jobs'))}</h2><hr class="rule" style="margin-top:0"><p class="desc">We are hiring! No openings are listed yet. Get in touch to ask about work with us.</p><div class="contact">${biz.email ? `<a class="pill" href="mailto:${esc(biz.email)}"><span class="ic">✉</span>${esc(biz.email)}</a>` : ''}${biz.phone ? `<a class="pill" href="tel:${esc(biz.phone)}"><span class="ic">📞</span>${esc(biz.phone)}</a>` : ''}</div>`;
+  return `<h2 class="sec">${esc(L('jobs'))}</h2><hr class="rule" style="margin-top:0">` + (biz.jobs || []).map(j => `
     <div class="post"><b>💼 ${esc(j.title)}</b>${j.employmentType ? ' · ' + esc(j.employmentType) : ''}
       <div class="pd">${j.location ? esc(j.location) + ' · ' : ''}Posted ${new Date(j.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}${j.closingDate ? ' · Closes ' + new Date(j.closingDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</div>
       ${j.salary ? `<div class="aboutRow"><b>Salary:</b> ${esc(j.salary)}</div>` : ''}
@@ -621,16 +617,16 @@ function menuHtml(){
     s.items.push(i);
   });
   if (isSv(biz.template)){
-    return `<h2 class="sec">${SV[biz.template].menu}</h2><hr class="rule" style="margin-top:0">
+    return `<h2 class="sec">${esc(L('menu'))}</h2><hr class="rule" style="margin-top:0">
       ${sections.length ? `<div class="twoCol">${sections.map(s => `<section>${s.key !== 'Menu' ? `<h3 style="font-size:16px;margin:10px 0 4px;color:var(--title)">${esc(s.key)}</h3>` : ''}${s.items.map(i => `<div class="menuRow"><span>${esc(i.name)}</span><span>${esc(i.price)}</span></div>`).join('')}</section>`).join('')}</div>` : `<p class="empty">${SV[biz.template].none}</p>`}
-      ${mp.length ? `<hr class="rule" style="margin:22px 0 14px"><h2 class="sec">Price list</h2>${tiles(mp, 'four')}` : ''}
-      ${hl.length ? `<hr class="rule" style="margin:22px 0 14px"><h2 class="sec">${SV[biz.template].feat}</h2><div class="grid four">${hl.map((u, i) => `<div><div class="tile"><img src="${u}" alt="" loading="lazy"></div><div class="cap">${esc(names[i] || '')}</div></div>`).join('')}</div>` : ''}`;
+      ${mp.length ? `<hr class="rule" style="margin:22px 0 14px"><h2 class="sec">${esc(L('pricelist'))}</h2>${tiles(mp, 'four')}` : ''}
+      ${hl.length ? `<hr class="rule" style="margin:22px 0 14px"><h2 class="sec">${esc(L('feat'))}</h2><div class="grid four">${hl.map((u, i) => `<div><div class="tile"><img src="${u}" alt="" loading="lazy"></div><div class="cap">${esc(names[i] || '')}</div></div>`).join('')}</div>` : ''}`;
   }
   return `
-    <h2 class="sec">Menu</h2>
+    <h2 class="sec">${esc(L('menu'))}</h2>
     ${mp.length ? tiles(mp, 'four') : '<p class="empty">No menu photos yet.</p>'}
     <hr class="rule" style="margin:22px 0 14px">
-    <h2 class="sec">Highlights</h2>
+    <h2 class="sec">${esc(L('feat'))}</h2>
     ${hl.length ? `<div class="grid four">${hl.map((u, i) => `<div><div class="tile"><img src="${u}" alt="" loading="lazy"></div><div class="cap">${esc(names[i] || '')}</div></div>`).join('')}</div>` : '<p class="empty">No highlights yet.</p>'}
     ${sections.length ? `<hr class="rule" style="margin:22px 0 14px"><div class="twoCol">${sections.map(s => `<section><h2 class="sec">${esc(s.key)}</h2>${s.items.map(i => `<div class="menuRow"><span>${esc(i.name)}</span><span>${esc(i.price)}</span></div>`).join('')}</section>`).join('')}</div>` : ''}`;
 }
@@ -661,7 +657,7 @@ function photosHtml(){
   const rest = fab ? items.slice(feat.length) : items;
   const tileHtml = i => `<div><div class="tile"><img src="${i.url}" alt="" loading="lazy">${i.del ? `<button type="button" class="delPhoto" data-id="${i.id}" aria-label="Remove photo">✕</button>` : ''}</div>${i.by ? `<div class="cap" style="font-size:12px;color:var(--muted)">${esc(i.by)}</div>` : ''}${i.id && !i.del ? reportBtn('photo', i.id, i.uid) : ''}</div>`;
   return `
-    <h2 class="sec">${SV[biz.template] ? SV[biz.template].photos : 'Photos'}</h2><hr class="rule" style="margin-top:0">
+    <h2 class="sec">${esc(L('photos'))}</h2><hr class="rule" style="margin-top:0">
     ${feat.length ? `<div class="grid">${feat.map(tileHtml).join('')}</div><hr class="rule" style="margin:22px 0 14px">` : ''}
     <div class="tools" style="margin-bottom:6px">${chip('all', 'All')}${chip('owner', 'Business')}${chip('customers', 'Customers')}${add}</div>
     <div class="msg" id="pmsg" role="status"></div>
@@ -759,7 +755,7 @@ function reviewsHtml(){
       <div class="bars" aria-label="Rating breakdown">${[5,4,3,2,1].map((n, i) => `<div class="barRow"><span>${n}★</span><div class="barTrack"><div class="barFill" style="width:${r.count ? Math.round(counts[i] / r.count * 100) : 0}%"></div></div><span>${counts[i]}</span></div>`).join('')}</div>
     </div>
     <hr class="rule">
-    <h2 class="sec">Rate and review</h2>
+    <h2 class="sec">${esc(L('rate'))}</h2>
     ${me ? `<div class="rateRow"><div class="avatar">${me.avatarUrl ? `<img src="${me.avatarUrl}" alt="" style="width:100%;height:100%;object-fit:cover">` : esc(((me.username || me.email || '?')[0]).toUpperCase())}</div>
         <div id="picker" aria-label="Your rating">${[1,2,3,4,5].map(n => `<button type="button" class="pick" data-n="${n}" aria-label="${n} star${n > 1 ? 's' : ''}">★</button>`).join('')}</div></div>
       <div style="font-size:12px;color:var(--muted);margin-top:6px">Posting as ${me.username ? '@' + esc(me.username) : 'Anonymous — <a href="/profile.html">add a username</a>'}</div>
@@ -831,6 +827,13 @@ function hexLum(hex){
   return .2126 * f(1) + .7152 * f(3) + .0722 * f(5);
 }
 // Overrides the design's own colours on the page. An empty value goes back to the design's colours.
+function applyFonts(f){
+  const st = document.body.style, S = window.TT_FONT_STACKS;
+  st.removeProperty('--head'); st.removeProperty('--body');
+  f = f || {};
+  if (f.heading && S[f.heading]) st.setProperty('--head', S[f.heading]);
+  if (f.body && S[f.body]) st.setProperty('--body', S[f.body]);
+}
 function applyBrand(hex){
   const st = document.body.style;
   ['--primary', '--primary-soft', '--accent', '--line', '--title', '--onAccent'].forEach(k => st.removeProperty(k));
@@ -870,7 +873,7 @@ window.addEventListener('message', e => {
     $('previewBar').classList.add('show');
     document.title = 'Preview — ' + biz.name;
     document.body.dataset.template = biz.template || 'food';
-    applyBrand(biz.brandColor);
+    applyBrand(biz.brandColor); applyFonts(biz.fonts);
     document.body.classList.add('ready'); render();
     return;
   }
@@ -882,7 +885,7 @@ window.addEventListener('message', e => {
   biz = b; me = u;
   document.title = biz.name + ' — TT Discover';
   document.body.dataset.template = biz.template || 'food';
-  applyBrand(biz.brandColor);
+  applyBrand(biz.brandColor); applyFonts(biz.fonts);
   document.body.classList.add('ready'); render();
 })();
 </script>

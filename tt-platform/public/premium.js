@@ -9,11 +9,11 @@
 const PP_PLANS = {
   free: {
     name: 'Free', tag: 'Get discovered.', cta: 'Choose free plan',
-    feat: ['Basic business page and page designs', 'Name, description, category and location', 'Business logo', 'Up to 5 photos', 'Basic social media links and contact info', 'Basic job listings', 'A few posts and announcements', 'Customer reviews and your replies', 'Invite collaborators to help manage your page, free']
+    feat: ['Business page with every page design and a page colour picker', 'Name, description, category and location', 'Business logo', 'Up to 5 photos', 'Basic social media links and contact info', 'Basic job listings', 'A few posts and announcements', 'Customer reviews and your replies', 'Invite collaborators to help manage your page, free']
   },
   basic: {
     name: 'Basic', tag: 'Grow your presence.', cta: 'Start Basic — free for 1 month', fine: 'Then TT$75/month.',
-    feat: ['Everything in Free, plus:', 'head:Design', 'More page designs and themes, including ones for restaurants, retail, beauty, construction and services', 'More colour and appearance choices', 'head:Photos', 'Around 30–40 photos and a larger gallery', 'head:Team', 'Invite collaborators for free, just like on every plan', 'More posts, social links and better job listings', 'head:Visibility', 'Featured placement in discovery sections (rotates between businesses)', 'head:Analytics', 'Page, job and post views', 'Website and phone/contact clicks']
+    feat: ['Everything in Free, plus:', 'head:Design', 'Change the headings, tab names, button wording and fonts on your page', 'head:Photos', 'Around 30–40 photos and a larger gallery', 'head:Team', 'Invite collaborators for free, just like on every plan', 'More posts, social links and better job listings', 'head:Visibility', 'Featured placement in discovery sections (rotates between businesses)', 'head:Analytics', 'Page, job and post views', 'Website and phone/contact clicks']
   },
   pro: {
     name: 'Pro', tag: 'Make your business your own.', cta: 'Start Pro — free for 1 month', fine: 'Then TT$150/month.',

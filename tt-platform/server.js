@@ -1156,7 +1156,7 @@ app.get('/api/my/businesses', requireUser, async (req, res) => {
     const ownerIds = [...new Set(list.map(b => b.ownerId).filter(Boolean))];
     const owners = ownerIds.length ? await usersCol.find({ _id: { $in: ownerIds.map(i => new ObjectId(i)) } }).toArray() : [];
     const planOf = {}; owners.forEach(o => { planOf[o._id.toString()] = effectivePlan(o); });
-    res.json(list.map(biz => ({ ...publicBiz(biz), isOwner: biz.ownerId === uid, photoLimit: PHOTO_LIMIT[planOf[biz.ownerId] || 'free'] })));
+    res.json(list.map(biz => ({ ...publicBiz(biz), isOwner: biz.ownerId === uid, ownerPlan: planOf[biz.ownerId] || 'free', photoLimit: PHOTO_LIMIT[planOf[biz.ownerId] || 'free'] })));
   } catch (err) {
     res.json([]);
   }
@@ -1209,8 +1209,25 @@ app.delete('/api/businesses/:id/photos/:photoId', requireUser, async (req, res) 
 });
 
 const TEMPLATES = ['food', 'fabric', 'beauty', 'build', 'bar', 'learn', 'farm', 'office'];
+// Text and fonts a Basic or Pro business may change. Keep in step with public/customize.js.
+const LABEL_KEYS = ['home', 'menu', 'photos', 'reviews', 'about', 'posts', 'jobs', 'description', 'feat', 'pricelist', 'cta', 'rate'];
+const FONT_KEYS_HEAD = ['oswald', 'playfair', 'bebas', 'merriweather', 'poppins', 'vibes'];
+const FONT_KEYS_BODY = ['poppins', 'merriweather', 'system'];
+function sanitizeLabels(obj){
+  const out = {};
+  if (!obj || typeof obj !== 'object') return out;
+  LABEL_KEYS.forEach(k => { const v = String(obj[k] || '').replace(/\s+/g, ' ').trim().slice(0, 30); if (v) out[k] = v; });
+  return out;
+}
+function sanitizeFonts(obj){
+  const out = {};
+  if (!obj || typeof obj !== 'object') return out;
+  if (FONT_KEYS_HEAD.includes(obj.heading)) out.heading = obj.heading;
+  if (FONT_KEYS_BODY.includes(obj.body)) out.body = obj.body;
+  return out;
+}
 // Designs only Premium businesses can pick. A page that already uses one keeps it if the plan ends.
-const PREMIUM_TEMPLATES = ['bar', 'learn', 'farm', 'office'];
+const PREMIUM_TEMPLATES = [];   // every design is free
 function templateAllowed(template, ownerUser, existingTemplate){
   return !PREMIUM_TEMPLATES.includes(template) || template === existingTemplate || effectivePlan(ownerUser) !== 'free';
 }
@@ -1326,6 +1343,12 @@ app.put('/api/my/businesses/:id', requireUser, requireBusinessAccount, async (re
       update.template = b.template;
     }
     if (typeof b.brandColor === 'string') update.brandColor = sanitizeColor(b.brandColor);
+    if (b.labels !== undefined || b.fonts !== undefined){
+      const labels = sanitizeLabels(b.labels), fonts = sanitizeFonts(b.fonts);
+      const changed = JSON.stringify(labels) !== JSON.stringify(biz.labels || {}) || JSON.stringify(fonts) !== JSON.stringify(biz.fonts || {});
+      if (changed && effectivePlan(ownerUser) === 'free') return res.status(403).json({ error: 'Changing the text and fonts on your page is for Basic and Pro businesses. Upgrade to use it.' });
+      update.labels = labels; update.fonts = fonts;
+    }
     if (typeof b.tagline === 'string') update.tagline = b.tagline.trim().slice(0, 60);
     if (typeof b.logoUrl === 'string') update.logoUrl = await storeImage(b.logoUrl);
     if (Array.isArray(b.highlightNames)) update.highlightNames = b.highlightNames.slice(0, 10).map(n => String(n || '').trim().slice(0, 40));
