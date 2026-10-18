@@ -225,6 +225,10 @@
     <div class="panel" data-field="facebook"><label for="f-facebook">Facebook</label><input type="url" id="f-facebook" placeholder="https://facebook.com/..."></div>
     <div class="panel" data-field="instagram"><label for="f-instagram">Instagram</label><input type="url" id="f-instagram" placeholder="https://instagram.com/..."></div>
     <div class="panel" data-field="website"><label for="f-website">Website</label><input type="url" id="f-website" placeholder="https://..."></div>
+    <div class="panel" data-field="tiktok"><div class="hint extraLock" style="display:none;margin:0 0 10px;">🔒 TikTok, YouTube, WhatsApp and X links are part of Basic and Pro. <a href="#" class="extraUpgrade">See plans</a></div><label for="f-tiktok">TikTok</label><input type="url" id="f-tiktok" placeholder="https://tiktok.com/@..."></div>
+    <div class="panel" data-field="youtube"><div class="hint extraLock" style="display:none;margin:0 0 10px;">🔒 TikTok, YouTube, WhatsApp and X links are part of Basic and Pro. <a href="#" class="extraUpgrade">See plans</a></div><label for="f-youtube">YouTube</label><input type="url" id="f-youtube" placeholder="https://youtube.com/..."></div>
+    <div class="panel" data-field="whatsapp"><div class="hint extraLock" style="display:none;margin:0 0 10px;">🔒 TikTok, YouTube, WhatsApp and X links are part of Basic and Pro. <a href="#" class="extraUpgrade">See plans</a></div><label for="f-whatsapp">WhatsApp number or link</label><input type="text" id="f-whatsapp" placeholder="Include the country code, e.g. 18685551234"></div>
+    <div class="panel" data-field="x"><div class="hint extraLock" style="display:none;margin:0 0 10px;">🔒 TikTok, YouTube, WhatsApp and X links are part of Basic and Pro. <a href="#" class="extraUpgrade">See plans</a></div><label for="f-x">X (Twitter)</label><input type="url" id="f-x" placeholder="https://x.com/..."></div>
 
     <div class="panel" data-field="analytics"><div id="analyticsBody"></div></div>
 
@@ -325,7 +329,7 @@ const SECTIONS = [
   { id: 'overview', label: 'Overview', title: 'Overview', subs: [['description','Description'],['photos','Photos'],['menu','Menu & Highlights']] },
   { id: 'about', label: 'About', title: 'About', subs: [['about','About']] },
   { id: 'location', label: 'Location', title: 'Location', subs: [['address','Address'],['hours','Hours'],['contact','Phone & Email']] },
-  { id: 'social', label: 'Social Media Links', title: 'Social Media Links', subs: [['facebook','Facebook'],['instagram','Instagram'],['website','Website']] },
+  { id: 'social', label: 'Social Media Links', title: 'Social Media Links', subs: [['facebook','Facebook'],['instagram','Instagram'],['website','Website'],['tiktok','TikTok'],['youtube','YouTube'],['whatsapp','WhatsApp'],['x','X']] },
   { id: 'designs', label: 'Business Designs', title: 'Business Designs', subs: [['designs','Business Designs']] },
   { id: 'textfonts', label: 'Text & Fonts', title: 'Text & Fonts', subs: [['textfonts','Text & Fonts']] },
   { sep: true },
@@ -382,7 +386,10 @@ function selectBiz(id){
   $('f-address').value = biz.address || ''; setAreaValue($('f-area'), biz.area);
   { const lim = biz.photoLimit || ttPhotoLimit(me.plan); $('photoLimitHint').textContent = 'Up to ' + lim + ' photos in each group.' + (lim <= 5 ? ' Basic and Pro allow more.' : lim <= 35 ? ' Pro allows more.' : ''); }
   $('f-phone').value = biz.phone || ''; $('f-email').value = biz.email || '';
-  ['facebook','instagram','website'].forEach(k => $('f-' + k).value = (biz.social || {})[k] || '');
+  ['facebook','instagram','website','tiktok','youtube','whatsapp','x'].forEach(k => $('f-' + k).value = (biz.social || {})[k] || '');
+  { const paidOwner = (biz.ownerPlan || me.plan) !== 'free';
+    ['tiktok','youtube','whatsapp','x'].forEach(k => { $('f-' + k).disabled = !paidOwner; });
+    document.querySelectorAll('.extraLock').forEach(el => { el.style.display = paidOwner ? 'none' : 'block'; }); }
   $('aboutFields').innerHTML = ABOUT.map(([k, l]) => `<label for="a-${k}">${l}</label><input type="text" id="a-${k}" maxlength="200" value="${esc((biz.about || {})[k] || '')}">`).join('');
   buildHours(); paintMenuItems();
   $('delName').value = ''; $('deleteBizBtn').disabled = true;
@@ -420,6 +427,7 @@ function paintTextFonts(fresh){
   $('tfLabels').innerHTML = ttLabelKeys(state.template).map(([k, d]) => `<label for="tl-${k}">${esc(d)}</label><input type="text" id="tl-${k}" maxlength="30" placeholder="${esc(def[k])}" value="${esc(state.labels[k] || '')}"${paid ? '' : ' disabled'}>`).join('');
 }
 $('tfUpgrade').addEventListener('click', e => { e.preventDefault(); window.ttOpenPremium(); });
+document.querySelectorAll('.extraUpgrade').forEach(a => a.addEventListener('click', e => { e.preventDefault(); window.ttOpenPremium(); }));
 
 function paintDesigns(){
   $('designCards').innerHTML = DESIGNS.map(d => `<button type="button" class="designCard${d.id === state.template ? ' on' : ''}" data-id="${d.id}" aria-pressed="${d.id === state.template}"><span class="sw" style="background:${d.swatch}"></span><span><b>${d.name}</b>${d.id === state.template ? ' ✓' : ''}${d.premium ? ` <span style="font-size:11px;font-weight:700;background:#e0562f;color:#fff;border-radius:10px;padding:2px 8px;margin-left:4px;">${['basic', 'pro'].includes(me.plan) || d.id === state.template ? '⭐ Basic+' : '🔒 Basic+'}</span>` : ''}<br><span style="font-size:12px;color:var(--muted)">${d.blurb}</span></span></button>`).join('');
@@ -591,7 +599,7 @@ $('saveBtn').addEventListener('click', async () => {
   $('msg').textContent = 'Saving...';
   readTextFonts();
   const about = {}; ABOUT.forEach(([k]) => about[k] = $('a-' + k).value);
-  const social = {}; ['facebook','instagram','website'].forEach(k => social[k] = $('f-' + k).value);
+  const social = {}; ['facebook','instagram','website','tiktok','youtube','whatsapp','x'].forEach(k => social[k] = $('f-' + k).value);
   const body = {
     name: $('f-name').value, category: $('f-category').value, description: $('f-description').value,
     address: $('f-address').value, area: $('f-area').value, phone: $('f-phone').value, email: $('f-email').value,
@@ -645,7 +653,21 @@ async function renderAnalytics(){
     return `<div class="bar" style="height:${Math.max(Math.round(c / max * 100), c > 0 ? 4 : 2)}%;"><span class="tip">${label}: ${c} view${c === 1 ? '' : 's'}</span></div>`;
   }).join('');
   const labels = days.map((d, i) => `<span>${i % 5 === 0 ? new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : ''}</span>`).join('');
-  $('analyticsBody').innerHTML = `<p class="toolNote">${esc(biz.name)} — page views, last 30 days</p><div class="totalNum">${total}</div><div class="hint">total views in this period</div><div class="chart">${bars}</div><div class="chartLabels">${labels}</div>`;
+  $('analyticsBody').innerHTML = `<p class="toolNote">${esc(biz.name)} — page views, last 30 days</p><div class="totalNum">${total}</div><div class="hint">total views in this period</div><div class="chart">${bars}</div><div class="chartLabels">${labels}</div>` + analyticsExtra(days);
+}
+function analyticsExtra(days){
+  if ((biz.ownerPlan || me.plan) === 'free'){
+    return `<div class="hint" style="margin-top:22px;">🔒 Clicks on your phone, email and social links, plus job and post views, are part of Basic and Pro. <a href="#" id="anUpgrade">See plans</a></div>`;
+  }
+  const ev = biz.eventsByDay || {};
+  const sum = types => types.reduce((t, k) => t + days.reduce((a, d) => a + ((ev[k] || {})[d] || 0), 0), 0);
+  const cards = [
+    ['📞', 'Phone taps', sum(['phone'])], ['✉️', 'Email taps', sum(['email'])], ['🌐', 'Website taps', sum(['website'])],
+    ['📱', 'Social link taps', sum(['facebook', 'instagram', 'tiktok', 'youtube', 'whatsapp', 'x'])],
+    ['💼', 'Jobs page visits', sum(['jobsTab'])], ['📰', 'Posts page visits', sum(['postsTab'])]
+  ];
+  setTimeout(() => { const a = $('anUpgrade'); if (a) a.addEventListener('click', e => { e.preventDefault(); window.ttOpenPremium(); }); }, 0);
+  return `<h3 style="font-size:15px;margin:24px 0 10px;">Last 30 days</h3><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;">${cards.map(([ic, l, n]) => `<div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;"><div style="font-size:12px;color:var(--muted);">${ic} ${l}</div><div style="font-size:24px;font-weight:700;">${n}</div></div>`).join('')}</div>`;
 }
 
 async function renderDeals(){

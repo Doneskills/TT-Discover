@@ -212,18 +212,34 @@ function sanitizeAbout(obj){
 }
 
 // Social links — all optional.
-const SOCIAL_FIELDS = ['facebook', 'instagram', 'website'];
+const SOCIAL_FIELDS = ['facebook', 'instagram', 'website', 'tiktok', 'youtube', 'whatsapp', 'x'];
+const EXTRA_SOCIAL = ['tiktok', 'youtube', 'whatsapp', 'x'];   // Basic and Pro only
+// Only real web links are kept (so a stored "javascript:" address can never run on a business page).
+function cleanSocialValue(key, raw){
+  let v = String(raw || '').trim().slice(0, 300);
+  if (!v) return '';
+  if (key === 'whatsapp' && /^[+\d][\d\s().+-]*$/.test(v)){
+    const digits = v.replace(/\D/g, '');
+    return digits.length >= 7 && digits.length <= 15 ? 'https://wa.me/' + digits : '';
+  }
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(v)) v = 'https://' + v.replace(/^\/+/, '');
+  try {
+    const u = new URL(v);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return '';
+    return u.toString().slice(0, 300);
+  } catch (e) { return ''; }
+}
 function sanitizeSocial(obj){
   const clean = {};
   if (obj && typeof obj === 'object'){
     SOCIAL_FIELDS.forEach(k => {
-      const v = String(obj[k] || '').trim().slice(0, 300);
+      const v = cleanSocialValue(k, obj[k]);
       if (v) clean[k] = v;
     });
   }
   return clean;
 }
-
+const hasExtraSocial = o => EXTRA_SOCIAL.some(k => o && o[k]);
 
 // ---------------- Safety helpers: rate limits, tokens, verification ----------------
 const rateBuckets = new Map();
@@ -484,7 +500,7 @@ app.get('/api/businesses', async (req, res) => {
       },
       { $addFields: { ownerRank: { $cond: ['$ownerIsPremium', '$ownerRank', 0] } } },
       { $sort: { isFeatured: -1, ownerRank: -1, name: 1 } },
-      { $project: { ownerInfo: 0, ownerIsPremium: 0, ownerRank: 0, staff: 0 } }
+      { $project: { ownerInfo: 0, ownerIsPremium: 0, ownerRank: 0, staff: 0, collaborators: 0, viewsByDay: 0, eventsByDay: 0 } }
     ]).toArray();
 
     res.json(list);
@@ -497,12 +513,26 @@ app.get('/api/businesses', async (req, res) => {
 app.get('/api/businesses/:id', async (req, res) => {
   if (!businessesCol) return res.status(404).json({ error: 'Not found' });
   try {
-    const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) }, { projection: { staff: 0 } });
+    const biz = await businessesCol.findOne({ _id: new ObjectId(req.params.id) }, { projection: { staff: 0, collaborators: 0, viewsByDay: 0, eventsByDay: 0 } });
     if (!biz) return res.status(404).json({ error: 'Not found' });
     res.json(biz);
   } catch (err) {
     res.status(404).json({ error: 'Not found' });
   }
+});
+
+// Counts a tap on a phone, email or social link, or a visit to the Posts or Jobs tab (once per visitor action).
+const EVENT_TYPES = ['phone', 'email', 'website', 'facebook', 'instagram', 'tiktok', 'youtube', 'whatsapp', 'x', 'postsTab', 'jobsTab'];
+app.post('/api/businesses/:id/event', async (req, res) => {
+  if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
+  const type = String((req.body && req.body.type) || '');
+  if (!EVENT_TYPES.includes(type)) return res.status(400).json({ error: 'Unknown event.' });
+  if (!rateCheck('ev:' + req.ip + ':' + req.params.id, 30, 60 * 1000)) return res.json({ ok: true });
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    await businessesCol.updateOne({ _id: new ObjectId(req.params.id) }, { $inc: { [`eventsByDay.${type}.${today}`]: 1 } });
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ error: 'Could not record that.' }); }
 });
 
 // Records one page view for today (UTC date key) — fire-and-forget from the client.
@@ -1156,13 +1186,20 @@ app.get('/api/my/businesses', requireUser, async (req, res) => {
     const ownerIds = [...new Set(list.map(b => b.ownerId).filter(Boolean))];
     const owners = ownerIds.length ? await usersCol.find({ _id: { $in: ownerIds.map(i => new ObjectId(i)) } }).toArray() : [];
     const planOf = {}; owners.forEach(o => { planOf[o._id.toString()] = effectivePlan(o); });
-    res.json(list.map(biz => ({ ...publicBiz(biz), isOwner: biz.ownerId === uid, ownerPlan: planOf[biz.ownerId] || 'free', photoLimit: PHOTO_LIMIT[planOf[biz.ownerId] || 'free'] })));
+    res.json(list.map(biz => ({ ...publicBiz(biz), ...((planOf[biz.ownerId] || 'free') === 'free' ? { eventsByDay: undefined } : {}), isOwner: biz.ownerId === uid, ownerPlan: planOf[biz.ownerId] || 'free', photoLimit: PHOTO_LIMIT[planOf[biz.ownerId] || 'free'] })));
   } catch (err) {
     res.json([]);
   }
 });
 
 const BUSINESS_LIMIT = { free: 1, basic: 3, pro: 5 };
+// How many posts and job listings a page can have at once (older pages that already have more keep them; they just cannot add more).
+const POST_LIMIT = { free: 3, basic: 15, pro: 50 };
+const JOB_LIMIT = { free: 2, basic: 10, pro: 30 };
+async function ownerPlanOfBiz(biz){
+  try { const o = await usersCol.findOne({ _id: new ObjectId(biz.ownerId) }); return effectivePlan(o); } catch (e) { return 'free'; }
+}
+const upgradeHint = plan => plan === 'free' ? ' Upgrade to Basic or Pro to add more.' : plan === 'basic' ? ' Upgrade to Pro to add more.' : '';
 
 
 // ---------------- Customer photo uploads (Photos page) ----------------
@@ -1268,7 +1305,7 @@ app.post('/api/my/businesses', requireUser, requireVerified, requireBusinessAcco
       template: TEMPLATES.includes(b.template) && templateAllowed(b.template, req.user, '') ? b.template : 'food',
       brandColor: sanitizeColor(b.brandColor),
       about: sanitizeAbout(b.about),
-      social: sanitizeSocial(b.social),
+      social: (() => { const so = sanitizeSocial(b.social); if (effectivePlan(req.user) === 'free') EXTRA_SOCIAL.forEach(k => delete so[k]); return so; })(),
       hiring: !!b.hiring,
       featured: false,
       deals: [],
@@ -1360,7 +1397,13 @@ app.put('/api/my/businesses/:id', requireUser, requireBusinessAccount, async (re
       })).filter(i => i.name);
     }
     if (b.about) update.about = sanitizeAbout(b.about);
-    if (b.social) update.social = sanitizeSocial(b.social);
+    if (b.social){
+      const so = sanitizeSocial(b.social);
+      if (effectivePlan(ownerUser) === 'free' && EXTRA_SOCIAL.some(k => (so[k] || '') !== ((biz.social || {})[k] || ''))){
+        return res.status(403).json({ error: 'TikTok, YouTube, WhatsApp and X links are for Basic and Pro businesses. Upgrade to add them.' });
+      }
+      update.social = so;
+    }
     if (!Object.keys(update).length) return res.status(400).json({ error: 'Nothing to update.' });
     await businessesCol.updateOne({ _id: biz._id }, { $set: update });
     res.json({ ok: true, business: { ...biz, ...update } });
@@ -1405,6 +1448,7 @@ app.post('/api/my/businesses/:id/posts', requireBizPermission('posts'), async (r
     const b = req.body || {};
     const title = String(b.title || '').trim().slice(0, 100);
     if (!title) return res.status(400).json({ error: 'A post title is required.' });
+    { const plan = await ownerPlanOfBiz(biz); if ((biz.posts || []).length >= POST_LIMIT[plan]) return res.status(403).json({ error: `This page can have up to ${POST_LIMIT[plan]} posts at once. Delete an old one to add a new one.` + upgradeHint(plan) }); }
     const post = {
       _id: new ObjectId(),
       title,
@@ -1435,6 +1479,7 @@ app.post('/api/my/businesses/:id/jobs', requireBizPermission('jobs'), async (req
     const b = req.body || {};
     const title = String(b.title || '').trim().slice(0, 100);
     if (!title) return res.status(400).json({ error: 'A job title is required.' });
+    { const plan = await ownerPlanOfBiz(biz); if ((biz.jobs || []).length >= JOB_LIMIT[plan]) return res.status(403).json({ error: `This page can have up to ${JOB_LIMIT[plan]} job listings at once. Delete an old one to add a new one.` + upgradeHint(plan) }); }
     const job = {
       _id: new ObjectId(),
       title,
