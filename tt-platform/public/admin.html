@@ -80,6 +80,15 @@
     <button id="migrateBtn" type="button">Move photos now</button>
     <div class="msg" id="migrateMsg" role="status"></div>
     <hr>
+    <h1 style="font-size:16px;">⭐ Set a plan</h1>
+    <div class="msg" style="color:#cbbfae;">Give an account the Free, Basic or Pro plan by hand. Useful for testing and for early businesses.</div>
+    <label for="planEmail">Account email</label>
+    <input type="email" id="planEmail" autocomplete="off">
+    <label for="planChoice">Plan</label>
+    <select id="planChoice" style="width:100%;padding:9px 10px;background:#241c15;border:1px solid #4a3a28;border-radius:6px;color:#f5ede1;font-size:14px;"><option value="free">Free</option><option value="basic">Basic</option><option value="pro">Pro</option></select>
+    <button id="planBtn" type="button">Set plan</button>
+    <div class="msg" id="planMsg" role="status"></div>
+    <hr>
     <h1 style="font-size:16px;">💾 Backups</h1>
     <div class="msg" style="color:#cbbfae;">Download a copy of your whole site and keep it somewhere safe, like Google Drive. Do this about once a week. The data file includes accounts, so keep it private.</div>
     <button id="bkData" type="button">Download data backup</button>
@@ -372,6 +381,18 @@ document.getElementById('rsBtn').addEventListener('click', async () => {
     msg.textContent = 'Stopped after ' + restored + ' records: ' + (e.message || 'something went wrong') + '. It is safe to run it again.';
   }
   btn.disabled = false;
+});
+
+document.getElementById('planBtn').addEventListener('click', async () => {
+  const msg = document.getElementById('planMsg');
+  const email = document.getElementById('planEmail').value.trim(), plan = document.getElementById('planChoice').value;
+  if (!email){ msg.textContent = 'Type the account email first.'; return; }
+  msg.textContent = 'Saving...';
+  try {
+    const res = await fetch('/api/admin/set-plan', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword }, body: JSON.stringify({ email, plan }) });
+    const d = await res.json().catch(() => ({}));
+    msg.textContent = res.ok ? email + ' is now on the ' + plan + ' plan.' : (d.error || 'Something went wrong.');
+  } catch (e) { msg.textContent = 'Could not reach the site. Try again.'; }
 });
 
 document.getElementById('loginBox').style.display = 'block';

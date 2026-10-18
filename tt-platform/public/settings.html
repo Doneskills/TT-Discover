@@ -369,7 +369,7 @@ function selectBiz(id){
   $('f-name').value = biz.name || ''; $('f-category').value = biz.category || '';
   $('f-description').value = biz.description || '';
   $('f-address').value = biz.address || ''; setAreaValue($('f-area'), biz.area);
-  { const lim = biz.photoLimit || ttPhotoLimit(me.plan); $('photoLimitHint').textContent = 'Up to ' + lim + ' photos in each group.' + (lim <= 5 ? ' Premium allows more.' : ''); }
+  { const lim = biz.photoLimit || ttPhotoLimit(me.plan); $('photoLimitHint').textContent = 'Up to ' + lim + ' photos in each group.' + (lim <= 5 ? ' Basic and Pro allow more.' : lim <= 35 ? ' Pro allows more.' : ''); }
   $('f-phone').value = biz.phone || ''; $('f-email').value = biz.email || '';
   ['facebook','instagram','website'].forEach(k => $('f-' + k).value = (biz.social || {})[k] || '');
   $('aboutFields').innerHTML = ABOUT.map(([k, l]) => `<label for="a-${k}">${l}</label><input type="text" id="a-${k}" maxlength="200" value="${esc((biz.about || {})[k] || '')}">`).join('');
@@ -390,10 +390,10 @@ const brandPicker = ttBrandPicker({
   getSwatch: () => (DESIGNS.find(d => d.id === state.template) || DESIGNS[0]).swatch
 });
 function paintDesigns(){
-  $('designCards').innerHTML = DESIGNS.map(d => `<button type="button" class="designCard${d.id === state.template ? ' on' : ''}" data-id="${d.id}" aria-pressed="${d.id === state.template}"><span class="sw" style="background:${d.swatch}"></span><span><b>${d.name}</b>${d.id === state.template ? ' ✓' : ''}${d.premium ? ` <span style="font-size:11px;font-weight:700;background:#e0562f;color:#fff;border-radius:10px;padding:2px 8px;margin-left:4px;">${me.plan === 'premium' || d.id === state.template ? '⭐ Premium' : '🔒 Premium'}</span>` : ''}<br><span style="font-size:12px;color:var(--muted)">${d.blurb}</span></span></button>`).join('');
+  $('designCards').innerHTML = DESIGNS.map(d => `<button type="button" class="designCard${d.id === state.template ? ' on' : ''}" data-id="${d.id}" aria-pressed="${d.id === state.template}"><span class="sw" style="background:${d.swatch}"></span><span><b>${d.name}</b>${d.id === state.template ? ' ✓' : ''}${d.premium ? ` <span style="font-size:11px;font-weight:700;background:#e0562f;color:#fff;border-radius:10px;padding:2px 8px;margin-left:4px;">${['basic', 'pro'].includes(me.plan) || d.id === state.template ? '⭐ Basic+' : '🔒 Basic+'}</span>` : ''}<br><span style="font-size:12px;color:var(--muted)">${d.blurb}</span></span></button>`).join('');
   document.querySelectorAll('.designCard').forEach(b => b.addEventListener('click', () => {
     const d = DESIGNS.find(x => x.id === b.dataset.id);
-    if (d.premium && me.plan !== 'premium' && d.id !== state.template){ window.ttOpenPremium(); return; }
+    if (d.premium && !['basic', 'pro'].includes(me.plan) && d.id !== state.template){ window.ttOpenPremium(); return; }
     state.template = b.dataset.id; paintDesigns(); brandPicker.designChanged();
   }));
 }

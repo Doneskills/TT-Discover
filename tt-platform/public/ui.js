@@ -50,11 +50,11 @@
   };
 
   // Photos a business can have in each group (gallery, menu, highlights). Keep in step with PHOTO_LIMIT in server.js.
-  window.ttPhotoLimit = function (plan) { return plan === 'premium' ? 20 : 5; };
+  window.ttPhotoLimit = function (plan) { return plan === 'pro' ? 100 : plan === 'basic' ? 35 : 5; };
   window.ttPhotoLimitMsg = function (plan, label) {
     var n = window.ttPhotoLimit(plan);
-    return plan === 'premium'
-      ? 'You have reached the limit of ' + n + ' ' + label + '.'
-      : 'Free business pages can have up to ' + n + ' ' + label + '. Upgrade to Premium to add more.';
+    if (plan === 'pro') return 'You have reached the limit of ' + n + ' ' + label + '.';
+    if (plan === 'basic') return 'Basic pages can have up to ' + n + ' ' + label + '. Upgrade to Pro to add more.';
+    return 'Free business pages can have up to ' + n + ' ' + label + '. Upgrade to Basic or Pro to add more.';
   };
 })();

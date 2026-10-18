@@ -161,20 +161,22 @@ async function storeImage(value){
 
 // Photo arrays for the business's own gallery, menu photos and highlights.
 // How many each group may hold depends on the owner's plan (customer photos on the Photos page are separate and not limited by this).
-const PHOTO_LIMIT = { free: 5, premium: 20 };
+const PHOTO_LIMIT = { free: 5, basic: 35, pro: 100 };
 async function sanitizePhotoArray(arr){
   if (!Array.isArray(arr)) return [];
   const out = [];
-  for (const u of arr.slice(0, PHOTO_LIMIT.premium)){
+  for (const u of arr.slice(0, PHOTO_LIMIT.pro)){
     const stored = await storeImage(u);
     if (stored) out.push(stored);
   }
   return out;
 }
+// Plans are 'free', 'basic' and 'pro'. Accounts that bought the old single "premium" plan keep full access as Pro.
+const PAID_PLANS = ['premium', 'basic', 'pro'];
 function effectivePlan(u){
-  if (!u || u.plan !== 'premium') return 'free';
+  if (!u || !PAID_PLANS.includes(u.plan)) return 'free';
   if (u.premiumMethod === 'wipay' && u.premiumExpiresAt && new Date(u.premiumExpiresAt) < new Date()) return 'free';
-  return 'premium';
+  return u.plan === 'premium' ? 'pro' : u.plan;
 }
 // Returns an error message if the request would put MORE photos on a page than the plan allows.
 // Pages that already hold more (older listings) can keep them or remove some, just not add.
@@ -186,9 +188,11 @@ function photoLimitError(body, plan, existing){
     const next = body[key].filter(Boolean).length;
     const prev = existing && Array.isArray(existing[key]) ? existing[key].length : 0;
     if (next > limit && next > prev){
-      return plan === 'premium'
+      return plan === 'pro'
         ? `This page has reached the limit of ${limit} ${label}.`
-        : `Free business pages can have up to ${limit} ${label}. Upgrade to Premium to add more.`;
+        : plan === 'basic'
+          ? `Basic pages can have up to ${limit} ${label}. Upgrade to Pro to add more.`
+          : `Free business pages can have up to ${limit} ${label}. Upgrade to Basic or Pro to add more.`;
     }
   }
   return '';
@@ -450,12 +454,18 @@ app.get('/api/businesses', async (req, res) => {
       },
       {
         $addFields: {
+          ownerRank: {
+            $let: {
+              vars: { owner: { $arrayElemAt: ['$ownerInfo', 0] } },
+              in: { $cond: [{ $in: ['$$owner.plan', ['premium', 'pro']] }, 2, { $cond: [{ $eq: ['$$owner.plan', 'basic'] }, 1, 0] }] }
+            }
+          },
           ownerIsPremium: {
             $let: {
               vars: { owner: { $arrayElemAt: ['$ownerInfo', 0] } },
               in: {
                 $and: [
-                  { $eq: ['$$owner.plan', 'premium'] },
+                  { $in: ['$$owner.plan', PAID_PLANS] },
                   { $or: [
                       { $ne: ['$$owner.premiumMethod', 'wipay'] },
                       { $eq: ['$$owner.premiumExpiresAt', null] },
@@ -472,8 +482,9 @@ app.get('/api/businesses', async (req, res) => {
           isFeatured: { $or: [ { $eq: ['$featured', true] }, '$ownerIsPremium' ] }
         }
       },
-      { $sort: { isFeatured: -1, name: 1 } },
-      { $project: { ownerInfo: 0, ownerIsPremium: 0, staff: 0 } }
+      { $addFields: { ownerRank: { $cond: ['$ownerIsPremium', '$ownerRank', 0] } } },
+      { $sort: { isFeatured: -1, ownerRank: -1, name: 1 } },
+      { $project: { ownerInfo: 0, ownerIsPremium: 0, ownerRank: 0, staff: 0 } }
     ]).toArray();
 
     res.json(list);
@@ -618,6 +629,20 @@ app.get('/api/cron/backup-email', async (req, res) => {
     console.error('Backup email failed:', err.message);
     res.status(500).json({ error: 'Backup email failed.' });
   }
+});
+
+// Admin: set a plan by hand for an account (for testing, early businesses, or someone who paid you directly).
+app.post('/api/admin/set-plan', requireAdmin, async (req, res) => {
+  if (!usersCol) return res.status(503).json({ error: 'Database not connected' });
+  const email = String((req.body && req.body.email) || '').trim().toLowerCase();
+  const plan = String((req.body && req.body.plan) || '');
+  if (!email || !['free', 'basic', 'pro'].includes(plan)) return res.status(400).json({ error: 'Give an email and a plan (free, basic or pro).' });
+  try {
+    const user = await usersCol.findOne({ email });
+    if (!user) return res.status(404).json({ error: 'No account with that email.' });
+    await usersCol.updateOne({ _id: user._id }, { $set: { plan, premiumMethod: plan === 'free' ? null : 'manual', premiumExpiresAt: null } });
+    res.json({ ok: true, email, plan });
+  } catch (err) { res.status(500).json({ error: 'Could not change the plan.' }); }
 });
 
 // Restore: the Admin page reads a backup file and sends it here in small batches of lines.
@@ -884,7 +909,7 @@ app.post('/api/contact', async (req, res) => {
 
 app.get('/api/me', requireUser, async (req, res) => {
   let user = req.user;
-  if (user.plan === 'premium' && user.premiumMethod === 'wipay' && user.premiumExpiresAt && new Date(user.premiumExpiresAt) < new Date()){
+  if (PAID_PLANS.includes(user.plan) && user.premiumMethod === 'wipay' && user.premiumExpiresAt && new Date(user.premiumExpiresAt) < new Date()){
     await usersCol.updateOne({ _id: user._id }, { $set: { plan: 'free' } });
     user.plan = 'free';
   }
@@ -895,8 +920,9 @@ app.get('/api/me', requireUser, async (req, res) => {
     emailVerified: user.emailVerified !== false,
     verificationRequired: mailEnabled,
     preferredArea: user.preferredArea || null,
-    plan: user.plan || 'free',
+    plan: effectivePlan(user),
     photoLimit: PHOTO_LIMIT[effectivePlan(user)],
+    businessLimit: BUSINESS_LIMIT[effectivePlan(user)],
     premiumMethod: user.premiumMethod || null,
     premiumExpiresAt: user.premiumExpiresAt || null,
     username: user.username || '',
@@ -1136,7 +1162,7 @@ app.get('/api/my/businesses', requireUser, async (req, res) => {
   }
 });
 
-const BUSINESS_LIMIT = { free: 1, premium: 3 };
+const BUSINESS_LIMIT = { free: 1, basic: 3, pro: 5 };
 
 
 // ---------------- Customer photo uploads (Photos page) ----------------
@@ -1186,18 +1212,21 @@ const TEMPLATES = ['food', 'fabric', 'beauty', 'build', 'bar', 'learn', 'farm', 
 // Designs only Premium businesses can pick. A page that already uses one keeps it if the plan ends.
 const PREMIUM_TEMPLATES = ['bar', 'learn', 'farm', 'office'];
 function templateAllowed(template, ownerUser, existingTemplate){
-  return !PREMIUM_TEMPLATES.includes(template) || template === existingTemplate || effectivePlan(ownerUser) === 'premium';
+  return !PREMIUM_TEMPLATES.includes(template) || template === existingTemplate || effectivePlan(ownerUser) !== 'free';
 }
 app.post('/api/my/businesses', requireUser, requireVerified, requireBusinessAccount, async (req, res) => {
   if (!businessesCol) return res.status(503).json({ error: 'Database not connected' });
   try {
     const ownedCount = await businessesCol.countDocuments({ ownerId: req.user._id.toString() });
-    const limit = BUSINESS_LIMIT[req.user.plan === 'premium' ? 'premium' : 'free'];
+    const myPlan = effectivePlan(req.user);
+    const limit = BUSINESS_LIMIT[myPlan];
     if (ownedCount >= limit){
       return res.status(403).json({
-        error: req.user.plan === 'premium'
-          ? `Premium accounts can own up to ${limit} businesses.`
-          : `Free accounts can own ${limit} business. Upgrade to Premium to own up to ${BUSINESS_LIMIT.premium}.`
+        error: myPlan === 'pro'
+          ? `Pro accounts can own up to ${limit} businesses.`
+          : myPlan === 'basic'
+            ? `Basic accounts can own up to ${limit} businesses. Upgrade to Pro to own up to ${BUSINESS_LIMIT.pro}.`
+            : `Free accounts can own ${limit} business. Upgrade to Basic to own up to ${BUSINESS_LIMIT.basic}, or Pro for up to ${BUSINESS_LIMIT.pro}.`
       });
     }
     const b = req.body || {};
@@ -1293,7 +1322,7 @@ app.put('/api/my/businesses/:id', requireUser, requireBusinessAccount, async (re
     if (Array.isArray(b.highlights)) update.highlights = await sanitizePhotoArray(b.highlights);
     if (typeof b.hiring === 'boolean') update.hiring = b.hiring;
     if (TEMPLATES.includes(b.template)){
-      if (!templateAllowed(b.template, ownerUser, biz.template)) return res.status(403).json({ error: 'That design is for Premium businesses. Pick one of the free designs, or upgrade to Premium.' });
+      if (!templateAllowed(b.template, ownerUser, biz.template)) return res.status(403).json({ error: 'That design is for Basic and Pro businesses. Pick one of the free designs, or upgrade.' });
       update.template = b.template;
     }
     if (typeof b.brandColor === 'string') update.brandColor = sanitizeColor(b.brandColor);
