@@ -482,24 +482,62 @@ function sendHeight(){
   window.parent.postMessage({ ttEmbedHeight: Math.ceil(document.querySelector('.shell').getBoundingClientRect().height) }, location.origin);
 }
 let firstRender = true;
+// The Page Builder blocks that show the business's own information, drawn from the saved page.
+let customReviewsDone = false;
+function dataTitle(b, def){ const t = String(b.title || '').trim() || def; return t ? `<h3 class="cb-h s">${esc(t)}</h3>` : ''; }
+const CUSTOM_RENDER = {
+  hours(b){
+    if (!biz.hours) return '';
+    const st = openStatus(biz.hours);
+    const lines = typeof biz.hours === 'string' ? [biz.hours] : ttCompactHours(biz.hours).split(' · ').filter(Boolean);
+    return dataTitle(b, 'Opening hours') + (st.known ? `<div class="cbStatus ${st.open ? 'open' : 'closed'}">${esc(st.text)}</div>` : '') + `<div class="cbLines">${lines.map(l => `<div>${esc(l)}</div>`).join('')}</div>`;
+  },
+  contact(b){
+    if (!biz.phone && !biz.email) return '';
+    return dataTitle(b, 'Contact') + `<div class="cbBtns">${biz.phone ? `<a class="cbBtn" href="tel:${esc(biz.phone)}" data-track="phone">📞 ${esc(biz.phone)}</a>` : ''}${biz.email ? `<a class="cbBtn outline" href="mailto:${esc(biz.email)}" data-track="email">✉ ${esc(biz.email)}</a>` : ''}</div>`;
+  },
+  location(b){
+    const a = [biz.address, biz.area].filter(Boolean).join(', ');
+    if (!a) return '';
+    return dataTitle(b, 'Find us') + `<p class="cbAddr">📍 ${esc(a)}</p><a class="cbBtn outline" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(a)}">Open in Maps</a>`;
+  },
+  social(b){
+    const chips = socialChips(biz.social || {});
+    return chips ? dataTitle(b, 'Follow us') + `<div class="chips" style="margin-top:0">${chips}</div>` : '';
+  },
+  gallery(b){
+    const cats = biz.photoCats || [], catName = (window.TT_PHOTO_CATS.find(c => c[0] === b.cat) || [])[1] || '';
+    const pics = (biz.photos || []).filter((u, i) => u && (!b.cat || cats[i] === b.cat)).slice(0, [3, 6, 9, 12].includes(Number(b.count)) ? Number(b.count) : 6);
+    return pics.length ? dataTitle(b, catName || 'Photos') + tiles(pics) : '';
+  },
+  about(){ return aboutFilled() ? aboutHtml() : ''; },
+  menu(){ return (biz.menuItems || []).length || (biz.menuPhotos || []).length || (biz.highlights || []).length ? menuHtml() : ''; },
+  posts(b){ const list = (biz.posts || []).slice(0, [3, 5, 10].includes(Number(b.count)) ? Number(b.count) : 5); return list.length ? postsHtml(list) : ''; },
+  jobs(){ return (biz.jobs || []).length || biz.hiring ? jobsHtml() : ''; },
+  reviews(){ if (customReviewsDone) return ''; customReviewsDone = true; return reviewsHtml(); }
+};
 function renderCustom(){
   const m = $('main');
+  window.ttApplyTheme(document.documentElement, biz.layout && biz.layout.theme);
   const blocks = (biz.layout && biz.layout.blocks) || [];
   document.documentElement.classList.remove('fabric');
+  customReviewsDone = false;
   m.innerHTML = `<div class="cpTop"><span class="cpBrand">${biz.logoUrl ? `<img src="${esc(biz.logoUrl)}" alt="">` : ''}<b>${esc(biz.name)}</b></span><span><a href="/">TT Discover</a><button type="button" id="cpTheme" aria-label="Switch light or dark mode">🌙</button></span></div>`
-    + (blocks.length ? window.ttBlocksHtml(blocks, { editing: previewMode }) : '<p class="cpEmpty">This page is still being built.</p>')
+    + (blocks.length ? window.ttBlocksHtml(blocks, { editing: previewMode, biz, render: b => CUSTOM_RENDER[b.type](b) }) : '<p class="cpEmpty">This page is still being built.</p>')
     + reportRowHtml();
   $('cpTheme').addEventListener('click', () => $('themeBtn').click());
-  m.querySelectorAll('.cb-p img').forEach(i => i.addEventListener('click', () => {
+  m.querySelectorAll('.cb-p img, .tile img, .post img').forEach(i => i.addEventListener('click', () => {
     if (embed && window.parent !== window){ window.parent.postMessage({ ttOpenPhoto: i.src }, location.origin); return; }
     window.ttLightbox.open(i.src);
   }));
+  if (customReviewsDone && $('searchBtn')) wireReviews();
   window.scrollTo(0, 0);
   if (embed) sendHeight();
   firstRender = false;
 }
 function render(){
   paintShell();
+  if (biz.template !== 'custom') window.ttApplyTheme(document.documentElement, null);
   if (biz.template === 'custom'){ renderCustom(); return; }
   const p = route();
   if ((p === 'posts' || p === 'jobs') && !tabSeen.has(p)){ tabSeen.add(p); track(p + 'Tab'); }
@@ -630,8 +668,8 @@ function aboutHtml(){
   const rows = Object.keys(ABOUT_LABELS).filter(k => a[k]).map(k => `<div class="aboutRow"><b>${ABOUT_LABELS[k]}:</b> ${esc(a[k])}</div>`).join('');
   return rows ? `<h2 class="sec" style="margin-top:22px">${esc(L('about'))}</h2>${rows}` : '';
 }
-function postsHtml(){
-  return `<h2 class="sec">${esc(L('posts'))}</h2><hr class="rule" style="margin-top:0">` + (biz.posts || []).map(p => `
+function postsHtml(list){
+  return `<h2 class="sec">${esc(L('posts'))}</h2><hr class="rule" style="margin-top:0">` + (list || biz.posts || []).map(p => `
     <div class="post"><b>${esc(p.title)}</b><div class="pd">${new Date(p.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
       ${p.content ? `<p class="desc">${esc(p.content)}</p>` : ''}${p.imageUrl ? `<img src="${p.imageUrl}" alt="">` : ''}</div>`).join('');
 }

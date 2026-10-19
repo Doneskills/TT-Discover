@@ -1185,8 +1185,19 @@ function publicBiz(biz){
 }
 
 // ---------------- Page Builder layout (Pro "Start blank" pages) ----------------
-const BLOCK_TYPES = ['heading', 'text', 'photo', 'button', 'divider', 'spacer'];
+const BLOCK_TYPES = ['heading', 'text', 'photo', 'button', 'divider', 'spacer', 'row'];
+// Blocks that show the business's own information automatically. Keep in step with public/customize.js.
+const DATA_BLOCK_TYPES = ['hours', 'contact', 'location', 'social', 'gallery', 'about', 'menu', 'posts', 'jobs', 'reviews'];
 const BLOCK_LIMIT = 40;
+// Gallery photo categories (Pro). Keep in step with TT_PHOTO_CATS in public/customize.js.
+const PHOTO_CATS = ['products', 'projects', 'events', 'team'];
+// photoCats lines up with photos by position. Only Pro can set them; a change to the photos on any other plan keeps them only if the photos did not change.
+function photoCatsFor(plan, photos, wanted, biz){
+  const same = JSON.stringify(photos) === JSON.stringify((biz && biz.photos) || []);
+  const src = plan === 'pro' && Array.isArray(wanted) ? wanted : (same && biz && Array.isArray(biz.photoCats) ? biz.photoCats : []);
+  const arr = photos.map((_, i) => PHOTO_CATS.includes(src[i]) ? src[i] : '');
+  return arr.some(Boolean) ? arr : [];
+}
 function cleanButtonUrl(raw){
   const v = String(raw || '').trim().slice(0, 300);
   if (!v) return '';
@@ -1201,22 +1212,50 @@ async function sanitizeLayout(layout){
   const pick = (v, list, d) => list.includes(v) ? v : d;
   const line = (v, n) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, n);
   const seen = new Set();
-  for (const raw of arr){
-    if (!raw || !BLOCK_TYPES.includes(raw.type)) continue;
+  let reviewsSeen = false;   // a page can only have one Reviews block
+  // depth 0 = top level (rows allowed); depth 1 = inside a row cell (no rows, no Reviews)
+  async function clean(raw, depth){
+    if (!raw || !(BLOCK_TYPES.includes(raw.type) || DATA_BLOCK_TYPES.includes(raw.type))) return null;
+    const type = raw.type;
+    if (depth > 0 && (type === 'row' || type === 'reviews')) return null;
+    if (type === 'reviews'){ if (reviewsSeen) return null; reviewsSeen = true; }
     let id = String(raw.id || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 20);
     if (!id || seen.has(id)) id = crypto.randomBytes(6).toString('hex');
     seen.add(id);
-    const type = raw.type, align = pick(raw.align, ['left', 'center', 'right'], 'left');
-    if (type === 'heading') out.blocks.push({ id, type, text: line(raw.text, 120), size: pick(raw.size, ['s', 'm', 'l'], 'm'), align });
-    else if (type === 'text') out.blocks.push({ id, type, text: String(raw.text || '').replace(/\r/g, '').slice(0, 2000).trimEnd(), align });
-    else if (type === 'photo'){
+    const align = pick(raw.align, ['left', 'center', 'right'], 'left');
+    if (type === 'heading') return { id, type, text: line(raw.text, 120), size: pick(raw.size, ['s', 'm', 'l'], 'm'), align };
+    if (type === 'text') return { id, type, text: String(raw.text || '').replace(/\r/g, '').slice(0, 2000).trimEnd(), align };
+    if (type === 'photo'){
       const url = await storeImage(raw.url);
-      out.blocks.push({ id, type, url: /^\/img\/[a-f0-9]{24}$/.test(url) || /^https:\/\//.test(url) ? url : '', caption: line(raw.caption, 120), width: pick(raw.width, ['s', 'm', 'full'], 'full'), align: pick(raw.align, ['left', 'center', 'right'], 'center') });
+      return { id, type, url: /^\/img\/[a-f0-9]{24}$/.test(url) || /^https:\/\//.test(url) ? url : '', caption: line(raw.caption, 120), width: pick(raw.width, ['s', 'm', 'full'], 'full'), align: pick(raw.align, ['left', 'center', 'right'], 'center') };
     }
-    else if (type === 'button') out.blocks.push({ id, type, label: line(raw.label, 40), url: cleanButtonUrl(raw.url), style: pick(raw.style, ['filled', 'outline'], 'filled'), align });
-    else if (type === 'divider') out.blocks.push({ id, type });
-    else if (type === 'spacer') out.blocks.push({ id, type, size: pick(raw.size, ['s', 'm', 'l'], 'm') });
+    if (type === 'button') return { id, type, label: line(raw.label, 40), url: cleanButtonUrl(raw.url), style: pick(raw.style, ['filled', 'outline'], 'filled'), align };
+    if (type === 'divider') return { id, type };
+    if (type === 'spacer') return { id, type, size: pick(raw.size, ['s', 'm', 'l'], 'm') };
+    if (type === 'row'){
+      const cols = Number(raw.cols) === 3 ? 3 : 2;
+      const cells = [];
+      for (const c of (Array.isArray(raw.cells) ? raw.cells.slice(0, cols) : [])){
+        const cc = await clean(c, 1);
+        cells.push(cc || { id: crypto.randomBytes(6).toString('hex'), type: 'text', text: '', align: 'left' });
+      }
+      while (cells.length < cols) cells.push({ id: crypto.randomBytes(6).toString('hex'), type: 'text', text: '', align: 'left' });
+      return { id, type, cols, cells };
+    }
+    // The blocks that show the business's own information
+    const block = { id, type, title: line(raw.title, 60) };
+    if (type === 'gallery'){ block.count = pick(Number(raw.count), [3, 6, 9, 12], 6); const cat = pick(raw.cat, PHOTO_CATS, ''); if (cat) block.cat = cat; }
+    if (type === 'posts') block.count = pick(Number(raw.count), [3, 5, 10], 5);
+    return block;
   }
+  for (const raw of arr){
+    const b = await clean(raw, 0);
+    if (b) out.blocks.push(b);
+  }
+  // Page colours (Pro)
+  const th = {};
+  ['bg', 'text', 'accent', 'title'].forEach(k => { const c = sanitizeColor(layout && layout.theme && layout.theme[k]); if (c) th[k] = c; });
+  if (Object.keys(th).length) out.theme = th;
   return out;
 }
 
@@ -1417,7 +1456,7 @@ app.put('/api/my/businesses/:id', requireUser, requireBusinessAccount, async (re
     if (typeof b.email === 'string') update.email = b.email.slice(0, 150);
     if (b.hours) update.hours = sanitizeHours(b.hours);
     if (typeof b.imageUrl === 'string') update.imageUrl = await storeImage(b.imageUrl);
-    if (Array.isArray(b.photos)) update.photos = await sanitizePhotoArray(b.photos);
+    if (Array.isArray(b.photos)){ update.photos = await sanitizePhotoArray(b.photos); update.photoCats = photoCatsFor(effectivePlan(ownerUser), update.photos, b.photoCats, biz); }
     if (Array.isArray(b.menuPhotos)) update.menuPhotos = await sanitizePhotoArray(b.menuPhotos);
     if (Array.isArray(b.highlights)) update.highlights = await sanitizePhotoArray(b.highlights);
     if (typeof b.hiring === 'boolean') update.hiring = b.hiring;
@@ -1619,7 +1658,8 @@ app.put('/api/my/businesses/:id/photos', requireBizPermission('photos'), async (
     const photoErr = photoLimitError({ photos: b.photos }, effectivePlan(ownerUser), biz);
     if (photoErr) return res.status(403).json({ error: photoErr });
     const photos = await sanitizePhotoArray(b.photos);
-    await businessesCol.updateOne({ _id: biz._id }, { $set: { photos } });
+    const photoCats = photoCatsFor(effectivePlan(ownerUser), photos, b.photoCats, biz);
+    await businessesCol.updateOne({ _id: biz._id }, { $set: { photos, photoCats } });
     res.json({ ok: true, photos });
   } catch (err) { res.status(500).json({ error: 'Could not save photos.' }); }
 });

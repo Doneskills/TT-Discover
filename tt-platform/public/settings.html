@@ -77,6 +77,24 @@
   .bdGrid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
   @media (max-width: 860px) { .bdGrid { grid-template-columns: 1fr; } }
   .cbCanvas { background: #fff; color: #222; --text: #222; --title: #111; --muted: #666; --divider: #ddd; font-family: var(--body, system-ui, sans-serif); border: 1px solid var(--border); border-radius: 12px; padding: 22px 18px 10px; min-height: 240px; max-width: 100%; overflow: hidden; }
+  .cbCanvas { background: var(--bg, #fff); color: var(--text, #222); }
+  .bdSide h4 { margin: 18px 0 6px; }
+  .palettes { display: flex; flex-wrap: wrap; gap: 6px; }
+  .palChip { margin: 0; display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px 5px 6px; border-radius: 16px; background: var(--bg); color: var(--text); border: 1px solid var(--input-border); font-size: 12px; font-weight: 600; }
+  .palChip span { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.25); display: inline-block; }
+  .palChip:hover { border-color: #e0562f; }
+  .colRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0 0; font-size: 14px; }
+  .colRow input { width: 52px; height: 32px; padding: 0; border: 1px solid var(--input-border); border-radius: 8px; background: none; cursor: pointer; }
+  .starters { display: grid; gap: 10px; margin-top: 14px; text-align: left; }
+  .starter { display: flex; gap: 12px; align-items: flex-start; width: 100%; margin: 0; text-align: left; padding: 12px 14px; border-radius: 12px; background: #fff; color: #222; border: 2px solid #e6dccb; font-weight: 400; font-size: 14px; }
+  .starter:hover { border-color: #e0562f; }
+  .starter .si { font-size: 24px; }
+  .starter small { display: block; color: #666; font-size: 12.5px; margin-top: 2px; line-height: 1.4; }
+  .catSel { position: absolute; left: 4px; right: 4px; bottom: 4px; width: auto; padding: 3px 4px; font-size: 11px; border-radius: 6px; margin: 0; background: rgba(255,255,255,.92); color: #222; border: none; }
+  .bdGroup { flex-basis: 100%; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-top: 6px; }
+  .bdGroup:first-child { margin-top: 0; }
+  .bdCell { border: 1px solid var(--border); border-radius: 10px; padding: 4px 12px 12px; margin-top: 10px; }
+  .bdCell h5 { font-size: 13px; margin: 10px 0 0; }
   .bdItem { position: relative; border: 2px solid transparent; border-radius: 10px; padding: 4px; margin: 0 -4px 6px; cursor: pointer; }
   .bdItem:hover { border-color: rgba(224,86,47,.35); }
   .bdItem.sel { border-color: #e0562f; }
@@ -240,7 +258,7 @@
     <div class="panel" data-field="photos">
       <label>Logo</label><div class="photoGrid" id="g-logo"></div>
       <button type="button" class="ghost" data-add="logo" style="margin-top:8px;">Choose logo</button>
-      <label>Photos of the business</label><div class="photoGrid" id="g-photos"></div>
+      <label>Photos of the business</label><div class="photoGrid" id="g-photos"></div><div class="hint" id="catHint"></div>
       <button type="button" class="ghost" data-add="photos" style="margin-top:8px;">Add photos</button>
     </div>
     <div class="panel" data-field="menu">
@@ -375,9 +393,16 @@
   <div class="toolLock" id="bdLock"></div>
   <div class="toolWrap" id="bdWrap">
     <div class="toolMain scroll"><div class="cbCanvas" id="bdCanvas"></div></div>
-    <div class="toolSide">
+    <div class="toolSide bdSide">
       <p class="hint" style="margin:14px 0 0;">Tap a block to add it. Tap a block on the page to change it, and use the arrows (or drag) to move it. Press Save to publish.</p>
       <div class="bdBar" id="bdBar"></div>
+      <h4>Page colours</h4>
+      <div class="palettes" id="bdPalettes"></div>
+      <div id="bdColors"></div>
+      <h4>Layouts</h4>
+      <p class="hint" style="margin:0 0 8px;">Start again from a ready-made page. You can change every part of it.</p>
+      <button type="button" class="small" id="bdLayouts">Choose a layout</button>
+      <div class="starters" id="bdStarters" style="display:none"></div>
       <div class="bdEdit" id="bdEdit"></div>
     </div>
   </div>
@@ -386,6 +411,7 @@
 
 <script src="/areas.js"></script>
 <script src="/ui.js"></script>
+<script src="/hours.js"></script>
 <script src="/customize.js"></script>
 <script src="/brandpicker.js"></script>
 <script>
@@ -459,7 +485,8 @@ function selectBiz(id){
     template: biz.template || 'food', hiring: !!biz.hiring, logoUrl: biz.logoUrl || '',
     menuItems: (biz.menuItems || []).map(i => ({ ...i })), highlightNames: [...(biz.highlightNames || [])],
     labels: { ...(biz.labels || {}) }, fonts: { ...(biz.fonts || {}) },
-    layout: { blocks: JSON.parse(JSON.stringify((biz.layout && biz.layout.blocks) || [])) }
+    layout: { blocks: JSON.parse(JSON.stringify((biz.layout && biz.layout.blocks) || [])), theme: { ...((biz.layout && biz.layout.theme) || {}) } },
+    photoCats: [...(biz.photoCats || [])]
   };
   bdSel = null;
   hoursTouched = false;
@@ -503,7 +530,7 @@ function previewDraft(){
   return { ...biz, labels: state.labels, fonts: state.fonts, layout: state.layout,
     name: $('f-name').value, category: $('f-category').value, description: $('f-description').value, address: $('f-address').value,
     phone: $('f-phone').value, email: $('f-email').value, template: state.template,
-    imageUrl: state.imageUrl, photos: state.photos, menuPhotos: state.menu, highlights: state.highlights, logoUrl: state.logoUrl,
+    imageUrl: state.imageUrl, photos: state.photos, photoCats: state.photoCats, menuPhotos: state.menu, highlights: state.highlights, logoUrl: state.logoUrl,
     menuItems: state.menuItems, tagline: $('f-tagline').value };
 }
 function paintChips(boxId, selId, opts){
@@ -609,8 +636,9 @@ function paintBuilder(){
     return;
   }
   lock.classList.remove('show'); wrap.classList.add('show');
-  $('bdBar').innerHTML = TT_BLOCK_TYPES.map(([t, n, ic]) => `<button type="button" data-add="${t}">${ic} ${n}</button>`).join('');
-  paintCanvas(); paintBlockEditor();
+  $('bdBar').innerHTML = '<div class="bdGroup">Basics</div>' + TT_BLOCK_TYPES.map(([t, n, ic]) => `<button type="button" data-add="${t}">${ic} ${n}</button>`).join('')
+    + '<div class="bdGroup">Your information (fills in by itself)</div>' + TT_DATA_ORDER.map(t => `<button type="button" data-add="${t}">${TT_DATA_BLOCKS[t].icon} ${TT_DATA_BLOCKS[t].name}</button>`).join('');
+  paintTheme(); paintCanvas(); paintBlockEditor();
 }
 function paintCanvas(){
   const cv = $('bdCanvas'), blocks = state.layout.blocks;
@@ -618,25 +646,95 @@ function paintCanvas(){
   ['heading', 'body'].forEach(k => cv.style.removeProperty(k === 'heading' ? '--head' : '--body'));
   if (state.fonts.heading && TT_FONT_STACKS[state.fonts.heading]) cv.style.setProperty('--head', TT_FONT_STACKS[state.fonts.heading]);
   if (state.fonts.body && TT_FONT_STACKS[state.fonts.body]) cv.style.setProperty('--body', TT_FONT_STACKS[state.fonts.body]);
-  if (!blocks.length){ cv.innerHTML = '<div class="bdEmpty">Your page is blank.<br>Tap a block above to add it.</div>'; return; }
+  ttApplyTheme(cv, state.layout.theme);
+  if (!blocks.length){ cv.innerHTML = '<div class="bdEmpty">Your page is blank.<br>Start from a layout, or tap a block on the right to add it.<div class="starters">' + startersHtml() + '</div></div>'; return; }
   cv.innerHTML = blocks.map((b, i) => `<div class="bdItem${b.id === bdSel ? ' sel' : ''}" data-id="${esc(b.id)}" draggable="true">
     <div class="bdTools"><span class="grip" title="Drag to move">⠿</span><button type="button" data-act="up" aria-label="Move up"${i === 0 ? ' disabled' : ''}>↑</button><button type="button" data-act="down" aria-label="Move down"${i === blocks.length - 1 ? ' disabled' : ''}>↓</button><button type="button" data-act="dup" aria-label="Copy">⧉</button><button type="button" data-act="del" aria-label="Delete">🗑</button></div>
-    ${ttBlocksHtml([b], { editing: true })}</div>`).join('');
+    ${ttBlocksHtml([b], { editing: true, biz: bdBiz() })}</div>`).join('');
+}
+
+// ---- Page colours and starter layouts ----
+const BD_COLS = [['bg', 'Background', '#ffffff'], ['text', 'Text', '#222222'], ['accent', 'Buttons and accents', '#e0562f'], ['title', 'Headings', '#222222']];
+function paintTheme(){
+  const t = state.layout.theme || (state.layout.theme = {});
+  $('bdPalettes').innerHTML = TT_PALETTES.map((p, i) => `<button type="button" class="palChip" data-pal="${i}"><span style="background:${p.bg}"></span><span style="background:${p.accent}"></span><span style="background:${p.text}"></span>${esc(p.name)}</button>`).join('');
+  $('bdColors').innerHTML = BD_COLS.map(([k, n, d]) => `<label class="colRow"><span>${n}</span><input type="color" data-k="${k}" value="${t[k] || d}"></label>`).join('')
+    + '<button type="button" class="small" id="bdColReset" style="margin-top:10px;">Use the standard colours</button>';
+}
+$('bdPalettes').addEventListener('click', e => {
+  const b = e.target.closest('[data-pal]'); if (!b) return;
+  const p = TT_PALETTES[Number(b.dataset.pal)];
+  state.layout.theme = { bg: p.bg, text: p.text, accent: p.accent, title: p.title };
+  paintTheme(); paintCanvas();
+});
+$('bdColors').addEventListener('input', e => {
+  const k = e.target.dataset && e.target.dataset.k; if (!k) return;
+  (state.layout.theme || (state.layout.theme = {}))[k] = e.target.value;
+  ttApplyTheme($('bdCanvas'), state.layout.theme);
+});
+$('bdColors').addEventListener('click', e => {
+  if (e.target.id !== 'bdColReset') return;
+  state.layout.theme = {}; paintTheme(); paintCanvas();
+});
+function startersHtml(){
+  return TT_STARTERS.map(s => `<button type="button" class="starter" data-starter="${s.id}"><span class="si">${s.icon}</span><span><b>${esc(s.name)}</b><small>${esc(s.desc)}</small></span></button>`).join('');
+}
+$('bdLayouts').addEventListener('click', () => {
+  const box = $('bdStarters'), open = box.style.display === 'none';
+  box.innerHTML = open ? startersHtml() : ''; box.style.display = open ? 'grid' : 'none';
+});
+document.addEventListener('click', async e => {
+  const c = e.target.closest('[data-starter]'); if (!c || !$('bdWrap').classList.contains('show')) return;
+  const s = TT_STARTERS.find(x => x.id === c.dataset.starter); if (!s) return;
+  if (state.layout.blocks.length && !(await ttConfirm('Replace everything on your page with the "' + s.name + '" layout? You can still leave without saving to keep your old page.', { ok: 'Use this layout', danger: true }))) return;
+  const r = s.build($('f-name').value.trim());
+  state.layout.blocks = r.blocks; state.layout.theme = r.theme; bdSel = null;
+  $('bdStarters').style.display = 'none';
+  paintTheme(); paintCanvas(); paintBlockEditor();
+});
+
+const BD_ALIGN = [['left', 'Left'], ['center', 'Centre'], ['right', 'Right']];
+// What the information blocks show while you build: the business's details as they are right now on this page.
+function bdBiz(){
+  const social = {}; ['facebook','instagram','website','tiktok','youtube','whatsapp','x'].forEach(k => social[k] = ($('f-' + k) || {}).value || '');
+  return { ...biz, phone: $('f-phone').value, email: $('f-email').value, address: $('f-address').value, area: $('f-area').value,
+    photos: state.photos, photoCats: state.photoCats, social, hours: hoursTouched ? readHours() : biz.hours };
 }
 function bdField(label, inner){ return `<label>${label}</label>${inner}`; }
-function bdSelect(f, v, opts){ return `<select data-f="${f}">${opts.map(([k, n]) => `<option value="${k}"${k === v ? ' selected' : ''}>${n}</option>`).join('')}</select>`; }
-const BD_ALIGN = [['left', 'Left'], ['center', 'Centre'], ['right', 'Right']];
+function bdSelect(f, v, opts, ca){ return `<select data-f="${f}"${ca || ''}>${opts.map(([k, n]) => `<option value="${k}"${String(k) === String(v) ? ' selected' : ''}>${n}</option>`).join('')}</select>`; }
+// The fields for one block. ca is an extra attribute (data-c="0") when the block sits in a column of a Columns block.
+function bdFieldsFor(b, ca, ci){
+  ca = ca || '';
+  const al = () => bdField('Align', bdSelect('align', b.align, BD_ALIGN, ca));
+  if (b.type === 'heading') return bdField('Heading', `<input type="text" data-f="text"${ca} maxlength="120" value="${esc(b.text)}">`) + `<div class="row2"><div>${bdField('Size', bdSelect('size', b.size, [['s', 'Small'], ['m', 'Medium'], ['l', 'Large']], ca))}</div><div>${al()}</div></div>`;
+  if (b.type === 'text') return bdField('Text', `<textarea data-f="text"${ca} maxlength="2000">${esc(b.text)}</textarea>`) + al();
+  if (b.type === 'photo') return `<button type="button" class="small" data-act="pickPhoto"${ca}>${b.url ? 'Change photo' : 'Choose a photo'}</button>` + (b.url ? ` <button type="button" class="small" data-act="clearPhoto"${ca}>Remove photo</button>` : '') + bdField('Caption (optional)', `<input type="text" data-f="caption"${ca} maxlength="120" value="${esc(b.caption)}">`) + `<div class="row2"><div>${bdField('Size', bdSelect('width', b.width, [['s', 'Small'], ['m', 'Medium'], ['full', 'Full width']], ca))}</div><div>${al()}</div></div>`;
+  if (b.type === 'button') return bdField('Button words', `<input type="text" data-f="label"${ca} maxlength="40" value="${esc(b.label)}">`) + bdField('Link, email or phone', `<input type="text" data-f="url"${ca} maxlength="300" value="${esc(b.url)}" placeholder="https://..., name@email.com or 868 555 1234">`) + `<div class="row2"><div>${bdField('Style', bdSelect('style', b.style, [['filled', 'Filled'], ['outline', 'Outline']], ca))}</div><div>${al()}</div></div>`;
+  if (b.type === 'spacer') return bdField('Space', bdSelect('size', b.size, [['s', 'Small'], ['m', 'Medium'], ['large' === 'x' ? 'l' : 'l', 'Large']], ca));
+  if (b.type === 'divider') return '<p class="hint">A thin line to separate parts of your page. Nothing to change.</p>';
+  const d = TT_DATA_BLOCKS[b.type];
+  if (d){
+    let h = `<p class="hint">${esc(d.note)}</p>`;
+    if (d.title) h += bdField('Heading', `<input type="text" data-f="title"${ca} maxlength="60" value="${esc(b.title)}" placeholder="${esc(d.title)}">`) + '<div class="hint">Leave empty to use the standard heading.</div>';
+    if (b.type === 'gallery') h += bdField('Show photos from', bdSelect('cat', b.cat || '', [['', 'All photos'], ...TT_PHOTO_CATS], ca)) + '<div class="hint">Sort your photos into categories under Overview.</div>';
+    if (d.count) h += bdField('How many to show', bdSelect('count', b.count || d.defCount, d.count.map(n => [n, n]), ca));
+    return h;
+  }
+  return '';
+}
 function paintBlockEditor(){
   const box = $('bdEdit'), b = bdBlk();
   if (!b){ box.innerHTML = '<h4>Edit a block</h4><p class="hint">Tap a block on the page to change its wording, photo or size.</p>'; return; }
-  const name = (TT_BLOCK_TYPES.find(t => t[0] === b.type) || [])[1] || 'Block';
+  const all = [...TT_BLOCK_TYPES, ...TT_DATA_ORDER.map(t => [t, TT_DATA_BLOCKS[t].name, TT_DATA_BLOCKS[t].icon])];
+  const name = (all.find(t => t[0] === b.type) || [])[1] || 'Block';
   let h = `<h4>${name}</h4>`;
-  if (b.type === 'heading') h += bdField('Heading', `<input type="text" data-f="text" maxlength="120" value="${esc(b.text)}">`) + `<div class="row2"><div>${bdField('Size', bdSelect('size', b.size, [['s', 'Small'], ['m', 'Medium'], ['l', 'Large']]))}</div><div>${bdField('Align', bdSelect('align', b.align, BD_ALIGN))}</div></div>`;
-  else if (b.type === 'text') h += bdField('Text', `<textarea data-f="text" maxlength="2000">${esc(b.text)}</textarea>`) + bdField('Align', bdSelect('align', b.align, BD_ALIGN));
-  else if (b.type === 'photo') h += `<button type="button" class="small" data-act="pickPhoto">${b.url ? 'Change photo' : 'Choose a photo'}</button>` + (b.url ? ' <button type="button" class="small" data-act="clearPhoto">Remove photo</button>' : '') + bdField('Caption (optional)', `<input type="text" data-f="caption" maxlength="120" value="${esc(b.caption)}">`) + `<div class="row2"><div>${bdField('Size', bdSelect('width', b.width, [['s', 'Small'], ['m', 'Medium'], ['full', 'Full width']]))}</div><div>${bdField('Align', bdSelect('align', b.align, BD_ALIGN))}</div></div>`;
-  else if (b.type === 'button') h += bdField('Button words', `<input type="text" data-f="label" maxlength="40" value="${esc(b.label)}">`) + bdField('Link, email or phone', `<input type="text" data-f="url" maxlength="300" value="${esc(b.url)}" placeholder="https://..., name@email.com or 868 555 1234">`) + `<div class="row2"><div>${bdField('Style', bdSelect('style', b.style, [['filled', 'Filled'], ['outline', 'Outline']]))}</div><div>${bdField('Align', bdSelect('align', b.align, BD_ALIGN))}</div></div>`;
-  else if (b.type === 'spacer') h += bdField('Space', bdSelect('size', b.size, [['s', 'Small'], ['m', 'Medium'], ['l', 'Large']]));
-  else h += '<p class="hint">A thin line to separate parts of your page. Nothing to change.</p>';
+  if (b.type === 'row'){
+    h += bdField('Columns', bdSelect('cols', b.cols, [[2, '2 columns'], [3, '3 columns']])) + '<div class="hint">On a phone the columns stack one under the other.</div>';
+    const cellTypes = [...TT_BLOCK_TYPES.filter(t => !['row', 'divider', 'spacer'].includes(t[0])), ...TT_DATA_ORDER.filter(t => t !== 'reviews').map(t => [t, TT_DATA_BLOCKS[t].name, TT_DATA_BLOCKS[t].icon])];
+    b.cells.forEach((c, i) => {
+      h += `<div class="bdCell"><h5>Column ${i + 1}</h5>` + bdField('Shows', `<select data-celltype="${i}">${cellTypes.map(([k, n, ic]) => `<option value="${k}"${k === c.type ? ' selected' : ''}>${ic} ${n}</option>`).join('')}</select>`) + bdFieldsFor(c, ` data-c="${i}"`, i) + '</div>';
+    });
+  } else h += bdFieldsFor(b, '');
   box.innerHTML = h;
 }
 function bdAdd(type){
@@ -761,6 +859,11 @@ function readHours(){
 // ---- Photos ----
 const GRIDS = { photos: ['g-photos', 'photos'], menu: ['g-menu', 'menu'], highlights: ['g-highlights', 'highlights'], logo: ['g-logo', 'logoUrl'] };
 function paintPhotos(){
+  if (!state.photoCats) state.photoCats = [];
+  while (state.photoCats.length < state.photos.length) state.photoCats.push('');
+  state.photoCats.length = state.photos.length;
+  const proCats = bdPro();
+  $('catHint').textContent = proCats && state.photos.length ? 'Pro: pick a category under each photo, then show them in separate galleries with the Page Builder.' : '';
   Object.entries(GRIDS).forEach(([key, [gid, sk]]) => {
     const single = key === 'logo';
     const items = single ? (state[sk] ? [state[sk]] : []) : state[sk];
@@ -768,7 +871,14 @@ function paintPhotos(){
     items.forEach((url, i) => {
       const w = document.createElement('div'); w.className = 'ph';
       w.innerHTML = `<img src="${url}" alt=""><button type="button" class="rm" aria-label="Remove photo">✕</button>`;
-      w.querySelector('.rm').addEventListener('click', () => { if (single) state[sk] = ''; else { state[sk].splice(i, 1); if (key === 'highlights') state.highlightNames.splice(i, 1); } paintPhotos(); paintHeader(); });
+      w.querySelector('.rm').addEventListener('click', () => { if (single) state[sk] = ''; else { state[sk].splice(i, 1); if (key === 'highlights') state.highlightNames.splice(i, 1); if (key === 'photos') state.photoCats.splice(i, 1); } paintPhotos(); paintHeader(); });
+      if (key === 'photos' && proCats){
+        const sel = document.createElement('select'); sel.className = 'catSel'; sel.setAttribute('aria-label', 'Category for photo ' + (i + 1));
+        sel.innerHTML = '<option value="">No category</option>' + TT_PHOTO_CATS.map(([k, n]) => `<option value="${k}">${n}</option>`).join('');
+        sel.value = state.photoCats[i] || '';
+        sel.addEventListener('change', () => { state.photoCats[i] = sel.value; });
+        w.appendChild(sel);
+      }
       $(gid).appendChild(w);
     });
   });
@@ -864,7 +974,7 @@ $('saveBtn').addEventListener('click', async () => {
     imageUrl: state.imageUrl, photos: state.photos, menuPhotos: state.menu, highlights: state.highlights, about, social,
     template: state.template, brandColor: brandPicker.get(), tagline: $('f-tagline').value, logoUrl: state.logoUrl, highlightNames: state.highlightNames.slice(0, state.highlights.length),
     menuItems: state.menuItems.filter(i => i.name.trim()),
-    labels: state.labels, fonts: state.fonts, layout: state.layout
+    labels: state.labels, fonts: state.fonts, layout: state.layout, photoCats: state.photoCats
   };
   if (!body.name.trim()){ $('msg').textContent = 'Business name is required.'; return; }
   if (hoursTouched) body.hours = readHours();
