@@ -499,9 +499,8 @@ function selectBiz(id){
   { const lim = biz.photoLimit || ttPhotoLimit(me.plan); $('photoLimitHint').textContent = 'Up to ' + lim + ' photos in each group.' + (lim <= 5 ? ' Basic and Pro allow more.' : lim <= 35 ? ' Pro allows more.' : ''); }
   $('f-phone').value = biz.phone || ''; $('f-email').value = biz.email || '';
   ['facebook','instagram','website','tiktok','youtube','whatsapp','x'].forEach(k => $('f-' + k).value = (biz.social || {})[k] || '');
-  { const paidOwner = (biz.ownerPlan || me.plan) !== 'free';
-    ['tiktok','youtube','whatsapp','x'].forEach(k => { $('f-' + k).disabled = !paidOwner; });
-    document.querySelectorAll('.extraLock').forEach(el => { el.style.display = paidOwner ? 'none' : 'block'; }); }
+  ['tiktok','youtube','whatsapp','x'].forEach(k => { $('f-' + k).disabled = false; });
+  document.querySelectorAll('.extraLock').forEach(el => { el.style.display = 'none'; });
   $('aboutFields').innerHTML = ABOUT.map(([k, l]) => `<label for="a-${k}">${l}</label><input type="text" id="a-${k}" maxlength="200" value="${esc((biz.about || {})[k] || '')}">`).join('');
   buildHours(); paintMenuItems();
   $('delName').value = ''; $('deleteBizBtn').disabled = true;

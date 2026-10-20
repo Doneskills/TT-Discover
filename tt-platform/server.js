@@ -175,7 +175,7 @@ async function sanitizePhotoArray(arr){
 const PAID_PLANS = ['premium', 'basic', 'pro'];
 function effectivePlan(u){
   if (!u || !PAID_PLANS.includes(u.plan)) return 'free';
-  if (u.premiumMethod === 'wipay' && u.premiumExpiresAt && new Date(u.premiumExpiresAt) < new Date()) return 'free';
+  if ((u.premiumMethod === 'wipay' || u.premiumMethod === 'paypal') && u.premiumExpiresAt && new Date(u.premiumExpiresAt) < new Date()) return 'free';
   return u.plan === 'premium' ? 'pro' : u.plan;
 }
 // Returns an error message if the request would put MORE photos on a page than the plan allows.
@@ -213,7 +213,7 @@ function sanitizeAbout(obj){
 
 // Social links — all optional.
 const SOCIAL_FIELDS = ['facebook', 'instagram', 'website', 'tiktok', 'youtube', 'whatsapp', 'x'];
-const EXTRA_SOCIAL = ['tiktok', 'youtube', 'whatsapp', 'x'];   // Basic and Pro only
+const EXTRA_SOCIAL = [];   // every social link is free on every plan (add a key here to make it Basic and Pro only again)
 // Only real web links are kept (so a stored "javascript:" address can never run on a business page).
 function cleanSocialValue(key, raw){
   let v = String(raw || '').trim().slice(0, 300);
@@ -483,7 +483,7 @@ app.get('/api/businesses', async (req, res) => {
                 $and: [
                   { $in: ['$$owner.plan', PAID_PLANS] },
                   { $or: [
-                      { $ne: ['$$owner.premiumMethod', 'wipay'] },
+                      { $not: [{ $in: ['$$owner.premiumMethod', ['wipay', 'paypal']] }] },
                       { $eq: ['$$owner.premiumExpiresAt', null] },
                       { $gt: ['$$owner.premiumExpiresAt', '$$NOW'] }
                   ] }
@@ -948,7 +948,7 @@ app.post('/api/contact', async (req, res) => {
 
 app.get('/api/me', requireUser, async (req, res) => {
   let user = req.user;
-  if (PAID_PLANS.includes(user.plan) && user.premiumMethod === 'wipay' && user.premiumExpiresAt && new Date(user.premiumExpiresAt) < new Date()){
+  if (PAID_PLANS.includes(user.plan) && (user.premiumMethod === 'wipay' || user.premiumMethod === 'paypal') && user.premiumExpiresAt && new Date(user.premiumExpiresAt) < new Date()){
     await usersCol.updateOne({ _id: user._id }, { $set: { plan: 'free' } });
     user.plan = 'free';
   }
@@ -1103,8 +1103,20 @@ app.get('/api/premium/wipay/return', async (req, res) => {
   res.redirect('/account.html?premium=' + (ok ? 'success' : 'failed'));
 });
 
+// PayPal subscriptions: one PayPal plan for Basic and one for Pro, each with a free first month.
+// Create them once with the button on the admin page, then put their IDs in PAYPAL_PLAN_BASIC and PAYPAL_PLAN_PRO.
+const paypalPlanIds = () => ({ basic: process.env.PAYPAL_PLAN_BASIC || '', pro: process.env.PAYPAL_PLAN_PRO || '' });
+function planFromPaypalPlanId(id){
+  const p = paypalPlanIds();
+  if (id && id === p.basic) return 'basic';
+  if (id && id === p.pro) return 'pro';
+  return '';
+}
 app.get('/api/paypal/config', (req, res) => {
-  res.json({ clientId: process.env.PAYPAL_CLIENT_ID || '', planId: process.env.PAYPAL_PLAN_ID || '' });
+  const ids = paypalPlanIds(), clientId = process.env.PAYPAL_CLIENT_ID || '';
+  const plans = {};
+  if (clientId){ if (ids.basic) plans.basic = ids.basic; if (ids.pro) plans.pro = ids.pro; }
+  res.json({ clientId, plans });
 });
 
 const PAYPAL_BASE = process.env.PAYPAL_ENV === 'sandbox'
@@ -1119,26 +1131,40 @@ async function paypalAccessToken(){
     body: 'grant_type=client_credentials'
   });
   const data = await resp.json();
+  if (!data.access_token) throw new Error('PayPal sign-in failed: ' + (data.error_description || data.error || resp.status));
   return data.access_token;
+}
+async function paypalGetSubscription(token, id){
+  const resp = await fetch(`${PAYPAL_BASE}/v1/billing/subscriptions/${encodeURIComponent(String(id))}`, { headers: { 'Authorization': 'Bearer ' + token } });
+  return resp.ok ? resp.json() : null;
+}
+// When a subscription stops, the business keeps the plan until the end of the period it already paid for.
+function paypalPaidUntil(sub){
+  const base = sub.billing_info && sub.billing_info.last_payment && sub.billing_info.last_payment.time || sub.start_time;
+  const t = base ? new Date(base).getTime() : NaN;
+  return isNaN(t) ? null : new Date(t + 31 * 24 * 60 * 60 * 1000);
 }
 
 // Handles PayPal's webhook notifications (cancellations, expirations, renewals).
 // The message itself is never trusted: we only use it as a nudge, then ask PayPal directly
 // for the subscription's real status, so a faked message can't change anyone's plan.
-app.post('/api/paypal/webhook', async (req, res) => {
+// PayPal's webhook form can refuse a URL that contains the word "paypal", so the same handler is also reachable at /api/billing/webhook.
+app.post(['/api/paypal/webhook', '/api/billing/webhook'], async (req, res) => {
   res.sendStatus(200); // acknowledge quickly, PayPal expects a fast response
   try {
     const eventType = String((req.body && req.body.event_type) || '');
     const subscriptionId = req.body && req.body.resource && req.body.resource.id;
     if (!eventType.startsWith('BILLING.SUBSCRIPTION.') || !subscriptionId || !usersCol) return;
     const token = await paypalAccessToken();
-    const resp = await fetch(`${PAYPAL_BASE}/v1/billing/subscriptions/${encodeURIComponent(String(subscriptionId))}`, { headers: { 'Authorization': 'Bearer ' + token } });
-    if (!resp.ok) return;
-    const sub = await resp.json();
-    if (sub.status === 'ACTIVE'){
-      await usersCol.updateOne({ paypalSubscriptionId: subscriptionId }, { $set: { plan: 'premium', premiumMethod: 'paypal', premiumExpiresAt: null } });
+    const sub = await paypalGetSubscription(token, subscriptionId);
+    if (!sub) return;
+    const plan = planFromPaypalPlanId(sub.plan_id);
+    if (sub.status === 'ACTIVE' && plan){
+      await usersCol.updateOne({ paypalSubscriptionId: subscriptionId }, { $set: { plan, premiumMethod: 'paypal', premiumExpiresAt: null } });
     } else if (['CANCELLED', 'EXPIRED', 'SUSPENDED'].includes(sub.status)){
-      await usersCol.updateOne({ paypalSubscriptionId: subscriptionId }, { $set: { plan: 'free' } });
+      const until = paypalPaidUntil(sub);
+      if (until && until > new Date()) await usersCol.updateOne({ paypalSubscriptionId: subscriptionId }, { $set: { premiumMethod: 'paypal', premiumExpiresAt: until } });
+      else await usersCol.updateOne({ paypalSubscriptionId: subscriptionId }, { $set: { plan: 'free', premiumExpiresAt: null } });
     }
     console.log('PayPal webhook handled:', subscriptionId, eventType, '->', sub.status);
   } catch (err) {
@@ -1146,28 +1172,78 @@ app.post('/api/paypal/webhook', async (req, res) => {
   }
 });
 
+// The browser tells us a subscription was approved; we ask PayPal directly before changing anyone's plan.
 app.post('/api/premium/paypal/confirm', requireUser, async (req, res) => {
   try {
     const subscriptionId = String((req.body && req.body.subscriptionId) || '').slice(0, 100);
     if (!subscriptionId) return res.status(400).json({ error: 'Missing subscription ID.' });
+    if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) return res.status(503).json({ error: 'PayPal is not set up yet.' });
     const token = await paypalAccessToken();
-    const resp = await fetch(`${PAYPAL_BASE}/v1/billing/subscriptions/${encodeURIComponent(subscriptionId)}`, {
-      headers: { 'Authorization': 'Bearer ' + token }
-    });
-    if (!resp.ok) return res.status(400).json({ error: 'Could not find that subscription.' });
-    const sub = await resp.json();
-    if (sub.status !== 'ACTIVE') return res.status(400).json({ error: 'Subscription is not active yet.' });
-    if (process.env.PAYPAL_PLAN_ID && sub.plan_id !== process.env.PAYPAL_PLAN_ID) return res.status(400).json({ error: 'That subscription is for a different plan.' });
+    const sub = await paypalGetSubscription(token, subscriptionId);
+    if (!sub) return res.status(400).json({ error: 'Could not find that subscription.' });
+    if (!['ACTIVE', 'APPROVED'].includes(sub.status)) return res.status(400).json({ error: 'The subscription is not active yet. If you were charged or it says approved in PayPal, wait a minute and refresh.' });
+    const plan = planFromPaypalPlanId(sub.plan_id);
+    if (!plan) return res.status(400).json({ error: 'That subscription is not for a TT Discover plan.' });
     const taken = await usersCol.findOne({ paypalSubscriptionId: subscriptionId, _id: { $ne: req.user._id } });
     if (taken) return res.status(400).json({ error: 'That subscription is already linked to another account.' });
+    const oldId = req.user.premiumMethod === 'paypal' && req.user.paypalSubscriptionId;
     await usersCol.updateOne(
       { _id: req.user._id },
-      { $set: { plan: 'premium', premiumMethod: 'paypal', paypalSubscriptionId: subscriptionId, premiumExpiresAt: null } }
+      { $set: { plan, premiumMethod: 'paypal', paypalSubscriptionId: subscriptionId, premiumExpiresAt: null } }
     );
-    res.json({ ok: true });
+    // Switching plans: stop the old subscription so they are not billed twice.
+    if (oldId && oldId !== subscriptionId){
+      try {
+        await fetch(`${PAYPAL_BASE}/v1/billing/subscriptions/${encodeURIComponent(oldId)}/cancel`, {
+          method: 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: 'Changed plan' })
+        });
+      } catch (e) { console.error('Could not cancel the old PayPal subscription', oldId, e.message); }
+    }
+    res.json({ ok: true, plan });
   } catch (err) {
     console.error('PayPal confirm failed:', err.message);
     res.status(500).json({ error: 'Could not confirm subscription.' });
+  }
+});
+
+// Admin: creates the Basic and Pro subscription plans in PayPal (free first month, then monthly, in US dollars).
+// Run it once, then copy the two IDs it returns into PAYPAL_PLAN_BASIC and PAYPAL_PLAN_PRO on Render.
+app.post('/api/admin/paypal/create-plans', requireAdmin, async (req, res) => {
+  try {
+    if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) return res.status(400).json({ error: 'Set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET on Render first.' });
+    const money = (v, d) => { const n = Number(v); return (isFinite(n) && n >= 1 && n <= 500 ? n : d).toFixed(2); };
+    const prices = { basic: money(req.body && req.body.basic, 11), pro: money(req.body && req.body.pro, 22) };
+    const token = await paypalAccessToken();
+    const call = async (path, body) => {
+      const r = await fetch(PAYPAL_BASE + path, {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json', 'Prefer': 'return=representation', 'PayPal-Request-Id': crypto.randomBytes(12).toString('hex') },
+        body: JSON.stringify(body)
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error((d.message || d.name || 'PayPal error') + (d.details && d.details[0] ? ': ' + (d.details[0].description || d.details[0].issue) : ''));
+      return d;
+    };
+    const product = await call('/v1/catalogs/products', { name: 'TT Discover plans', description: 'Basic and Pro plans for TT Discover business pages', type: 'SERVICE', category: 'SOFTWARE' });
+    const out = {};
+    for (const key of ['basic', 'pro']){
+      const plan = await call('/v1/billing/plans', {
+        product_id: product.id,
+        name: 'TT Discover ' + (key === 'basic' ? 'Basic' : 'Pro'),
+        description: (key === 'basic' ? 'Basic' : 'Pro') + ' plan: first month free, then monthly',
+        status: 'ACTIVE',
+        billing_cycles: [
+          { frequency: { interval_unit: 'MONTH', interval_count: 1 }, tenure_type: 'TRIAL', sequence: 1, total_cycles: 1, pricing_scheme: { fixed_price: { value: '0', currency_code: 'USD' } } },
+          { frequency: { interval_unit: 'MONTH', interval_count: 1 }, tenure_type: 'REGULAR', sequence: 2, total_cycles: 0, pricing_scheme: { fixed_price: { value: prices[key], currency_code: 'USD' } } }
+        ],
+        payment_preferences: { auto_bill_outstanding: true, setup_fee: { value: '0', currency_code: 'USD' }, setup_fee_failure_action: 'CANCEL', payment_failure_threshold: 3 }
+      });
+      out[key] = plan.id;
+    }
+    res.json({ ok: true, env: process.env.PAYPAL_ENV === 'sandbox' ? 'sandbox' : 'live', basic: out.basic, pro: out.pro, prices });
+  } catch (err) {
+    console.error('Creating PayPal plans failed:', err.message);
+    res.status(500).json({ error: err.message || 'Could not create the plans.' });
   }
 });
 

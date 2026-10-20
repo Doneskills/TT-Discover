@@ -80,6 +80,11 @@
     <button id="migrateBtn" type="button">Move photos now</button>
     <div class="msg" id="migrateMsg" role="status"></div>
     <hr>
+    <h1 style="font-size:16px;">💳 PayPal plans</h1>
+    <div class="msg" style="color:#cbbfae;">Creates the Basic and Pro subscriptions in PayPal (free first month, then monthly, charged in US dollars). Run it once after setting PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET and PAYPAL_ENV on Render, then copy the two IDs it shows into PAYPAL_PLAN_BASIC and PAYPAL_PLAN_PRO.</div>
+    <button id="ppPlansBtn" type="button">Create PayPal plans</button>
+    <div class="msg" id="ppPlansMsg" role="status" style="word-break:break-all;"></div>
+    <hr>
     <h1 style="font-size:16px;">⭐ Set a plan</h1>
     <div class="msg" style="color:#cbbfae;">Give an account the Free, Basic or Pro plan by hand. Useful for testing and for early businesses.</div>
     <label for="planEmail">Account email</label>
@@ -300,6 +305,20 @@ document.getElementById('migrateBtn').addEventListener('click', async () => {
     const d = await res.json().catch(() => ({}));
     if (!res.ok){ msg.textContent = d.error || 'Something went wrong.'; }
     else msg.textContent = 'Done. Photos moved: ' + d.converted + ' (businesses updated: ' + d.businesses + ', accounts: ' + d.users + ', customer photos: ' + d.customerPhotos + '). Unsafe links removed: ' + (d.cleaned || 0) + '. Could not read: ' + d.failed + '.';
+  } catch (e) { msg.textContent = 'Could not reach the site. Try again.'; }
+  btn.disabled = false;
+});
+
+document.getElementById('ppPlansBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('ppPlansBtn'), msg = document.getElementById('ppPlansMsg');
+  const basic = window.prompt('Basic price in US dollars per month (TT$75 is about US$11):', '11'); if (basic === null) return;
+  const pro = window.prompt('Pro price in US dollars per month (TT$150 is about US$22):', '22'); if (pro === null) return;
+  btn.disabled = true; msg.textContent = 'Creating the plans in PayPal...';
+  try {
+    const res = await fetch('/api/admin/paypal/create-plans', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword }, body: JSON.stringify({ basic, pro }) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) msg.textContent = d.error || 'Something went wrong.';
+    else msg.textContent = 'Done (' + d.env + '). Put these on Render: PAYPAL_PLAN_BASIC=' + d.basic + '   PAYPAL_PLAN_PRO=' + d.pro + '   Prices: US$' + d.prices.basic + ' and US$' + d.prices.pro + ' a month.';
   } catch (e) { msg.textContent = 'Could not reach the site. Try again.'; }
   btn.disabled = false;
 });
