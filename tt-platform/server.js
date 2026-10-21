@@ -1145,6 +1145,20 @@ function paypalPaidUntil(sub){
   return isNaN(t) ? null : new Date(t + 31 * 24 * 60 * 60 * 1000);
 }
 
+// Each new PayPal subscription carries the buyer's account as a signed tag (custom_id). If the browser never reports the
+// approval (for example the PayPal window stays blank), the webhook can still find the right account from this tag.
+function paypalTag(userId){
+  const sig = crypto.createHmac('sha256', process.env.PAYPAL_CLIENT_SECRET || process.env.ADMIN_PASSWORD || 'tt-discover').update(String(userId)).digest('hex').slice(0, 20);
+  return String(userId) + '.' + sig;
+}
+function userIdFromPaypalTag(tag){
+  const parts = String(tag || '').split('.');
+  if (parts.length !== 2 || !/^[a-f0-9]{24}$/.test(parts[0])) return null;
+  const want = Buffer.from(paypalTag(parts[0]).split('.')[1]), got = Buffer.from(parts[1]);
+  return want.length === got.length && crypto.timingSafeEqual(want, got) ? parts[0] : null;
+}
+app.post('/api/premium/paypal/start', requireUser, (req, res) => res.json({ customId: paypalTag(req.user._id.toString()) }));
+
 // Handles PayPal's webhook notifications (cancellations, expirations, renewals).
 // The message itself is never trusted: we only use it as a nudge, then ask PayPal directly
 // for the subscription's real status, so a faked message can't change anyone's plan.
@@ -1160,7 +1174,21 @@ app.post(['/api/paypal/webhook', '/api/billing/webhook'], async (req, res) => {
     if (!sub) return;
     const plan = planFromPaypalPlanId(sub.plan_id);
     if (sub.status === 'ACTIVE' && plan){
-      await usersCol.updateOne({ paypalSubscriptionId: subscriptionId }, { $set: { plan, premiumMethod: 'paypal', premiumExpiresAt: null } });
+      const r = await usersCol.updateOne({ paypalSubscriptionId: subscriptionId }, { $set: { plan, premiumMethod: 'paypal', premiumExpiresAt: null } });
+      if (!r.matchedCount){
+        // Nobody is linked to this subscription yet (the browser did not report it), so use the signed tag on the subscription.
+        const uid = userIdFromPaypalTag(sub.custom_id);
+        const owner = uid && await usersCol.findOne({ _id: new ObjectId(uid) });
+        if (owner){
+          await usersCol.updateOne({ _id: owner._id }, { $set: { plan, premiumMethod: 'paypal', paypalSubscriptionId: subscriptionId, premiumExpiresAt: null } });
+          const oldId = owner.premiumMethod === 'paypal' && owner.paypalSubscriptionId;
+          if (oldId && oldId !== subscriptionId){
+            try { await fetch(`${PAYPAL_BASE}/v1/billing/subscriptions/${encodeURIComponent(oldId)}/cancel`, { method: 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: 'Changed plan' }) }); }
+            catch (e) { console.error('Could not cancel the old PayPal subscription', oldId, e.message); }
+          }
+          console.log('PayPal webhook linked', subscriptionId, 'to account', uid);
+        }
+      }
     } else if (['CANCELLED', 'EXPIRED', 'SUSPENDED'].includes(sub.status)){
       const until = paypalPaidUntil(sub);
       if (until && until > new Date()) await usersCol.updateOne({ paypalSubscriptionId: subscriptionId }, { $set: { premiumMethod: 'paypal', premiumExpiresAt: until } });

@@ -20,6 +20,24 @@ const PP_PLANS = {
     feat: ['Everything in Basic, plus:', 'head:Page Builder', 'Build your own page from a blank one: columns, headings, text, photos, buttons, and blocks for your hours, contact, menu, posts, jobs and reviews', 'Five ready-made starter layouts and your own page colours', 'head:Content', 'Up to 100 photos, sorted into Products, Projects, Events and Team galleries', 'Up to 50 posts and 30 job listings', 'Up to 5 businesses', 'head:Visibility', 'Priority placement in discovery sections', 'head:Coming soon', 'Verified badge', 'WhatsApp button on your page', 'A free boost each month', 'Monthly results email', 'Top posts, top jobs and visitor trends']
   }
 };
+let ppWatchTimer = null;
+// After someone starts a PayPal subscription, check every few seconds whether the plan has switched, so the popup updates
+// even when the PayPal window does not close by itself.
+function watchForPlan(key, token){
+  clearInterval(ppWatchTimer);
+  let tries = 0;
+  ppWatchTimer = setInterval(async () => {
+    if (++tries > 45) { clearInterval(ppWatchTimer); return; }
+    try {
+      const r = await fetch('/api/me', { headers: { 'x-auth-token': token } });
+      const d = r.ok ? await r.json() : null;
+      if (d && d.plan === key) {
+        clearInterval(ppWatchTimer); ppMyPlan = key; renderPremiumPlan(key);
+        document.getElementById('premiumMsg').textContent = "You're on " + PP_PLANS[key].name + '! Refresh your Settings page to see your new features.';
+      }
+    } catch (e) {}
+  }, 4000);
+}
 let ppSelected = 'basic';
 let ppMyPlan = '';   // 'free', 'basic' or 'pro' once we know who is signed in
 
@@ -87,14 +105,21 @@ async function ppStart(){
   msg.textContent = 'Pay with PayPal or a card. You will not be charged for the first month, and you can cancel any time before it ends.';
   window.paypal.Buttons({
     style: { layout: 'vertical', shape: 'pill', label: 'subscribe' },
-    createSubscription: (data, actions) => actions.subscription.create({ plan_id: cfg.plans[key] }),
+    createSubscription: async (data, actions) => {
+      // A signed tag lets the site find this account even if the PayPal window never reports back.
+      let customId = '';
+      try { const t = await fetch('/api/premium/paypal/start', { method: 'POST', headers: { 'x-auth-token': token } }); customId = ((await t.json()) || {}).customId || ''; } catch (e) {}
+      const id = await actions.subscription.create(customId ? { plan_id: cfg.plans[key], custom_id: customId } : { plan_id: cfg.plans[key] });
+      watchForPlan(key, token);
+      return id;
+    },
     onApprove: async (data) => {
       msg.textContent = 'Confirming your plan...';
       try {
         const r = await fetch('/api/premium/paypal/confirm', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': token }, body: JSON.stringify({ subscriptionId: data.subscriptionID }) });
         const d = await r.json().catch(() => ({}));
         if (!r.ok){ msg.textContent = d.error || 'Could not confirm your plan. If PayPal says it went through, contact us and we will sort it out.'; return; }
-        ppMyPlan = key; renderPremiumPlan(key);
+        clearInterval(ppWatchTimer); ppMyPlan = key; renderPremiumPlan(key);
         document.getElementById('premiumMsg').textContent = "You're on " + PP_PLANS[key].name + '! Refresh your Settings page to see your new features.';
       } catch (e) { msg.textContent = 'Could not reach the site. If PayPal says it went through, refresh in a minute.'; }
     },
