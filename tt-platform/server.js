@@ -1234,6 +1234,32 @@ app.post('/api/premium/paypal/confirm', requireUser, async (req, res) => {
   }
 });
 
+// The owner cancels their own subscription from the site. They keep the plan until the period they paid for ends.
+app.post('/api/premium/paypal/cancel', requireUser, async (req, res) => {
+  try {
+    const user = req.user;
+    if (user.premiumMethod !== 'paypal' || !user.paypalSubscriptionId) return res.status(400).json({ error: 'There is no PayPal subscription on this account to cancel.' });
+    const token = await paypalAccessToken();
+    const sub = await paypalGetSubscription(token, user.paypalSubscriptionId);
+    const until = sub ? paypalPaidUntil(sub) : null;
+    if (sub && ['ACTIVE', 'SUSPENDED', 'APPROVED', 'APPROVAL_PENDING'].includes(sub.status)){
+      const resp = await fetch(`${PAYPAL_BASE}/v1/billing/subscriptions/${encodeURIComponent(user.paypalSubscriptionId)}/cancel`, {
+        method: 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: 'Cancelled by the owner on TT Discover' })
+      });
+      if (!resp.ok && resp.status !== 422) return res.status(502).json({ error: 'PayPal could not cancel it right now. Please try again in a minute.' });
+    }
+    if (until && until > new Date()){
+      await usersCol.updateOne({ _id: user._id }, { $set: { premiumMethod: 'paypal', premiumExpiresAt: until } });
+      return res.json({ ok: true, plan: user.plan, until });
+    }
+    await usersCol.updateOne({ _id: user._id }, { $set: { plan: 'free', premiumExpiresAt: null } });
+    res.json({ ok: true, plan: 'free', until: null });
+  } catch (err) {
+    console.error('PayPal cancel failed:', err.message);
+    res.status(500).json({ error: 'Could not cancel the subscription.' });
+  }
+});
+
 // Admin: creates the Basic and Pro subscription plans in PayPal (free first month, then monthly, in US dollars).
 // Run it once, then copy the two IDs it returns into PAYPAL_PLAN_BASIC and PAYPAL_PLAN_PRO on Render.
 app.post('/api/admin/paypal/create-plans', requireAdmin, async (req, res) => {
